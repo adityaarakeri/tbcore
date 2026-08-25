@@ -107,6 +107,31 @@ def test_no_cache_marker_without_prefix(tmp_path):
         assert "cache_control" not in block
 
 
+def test_tools_are_passed_through(tmp_path):
+    transport = FakeTransport()
+    client = make_client(tmp_path, transport)
+    tools = [
+        {
+            "name": "read_file",
+            "description": "Read a file",
+            "input_schema": {"type": "object", "properties": {}},
+        }
+    ]
+
+    client.complete(None, [{"role": "user", "content": "x"}], tools=tools)
+
+    assert transport.requests[0].payload["tools"] == tools
+
+
+def test_no_tools_key_without_tools(tmp_path):
+    transport = FakeTransport()
+    client = make_client(tmp_path, transport)
+
+    client.complete(None, [{"role": "user", "content": "x"}])
+
+    assert "tools" not in transport.requests[0].payload
+
+
 def test_api_key_read_from_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "env-key-123")
     transport = FakeTransport()

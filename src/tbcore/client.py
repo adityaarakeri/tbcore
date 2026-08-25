@@ -164,12 +164,15 @@ class Client:
         messages: Sequence[Mapping[str, Any]],
         cache_prefix: str | None = None,
         max_tokens: int | None = None,
+        tools: Sequence[Mapping[str, Any]] | None = None,
     ) -> Completion:
         payload: dict[str, Any] = {
             "model": self.spec.model_id,
             "max_tokens": max_tokens or self.max_tokens_default,
             "messages": [_message(m) for m in messages],
         }
+        if tools:
+            payload["tools"] = [dict(tool) for tool in tools]
         system_blocks = []
         if cache_prefix:
             system_blocks.append(
