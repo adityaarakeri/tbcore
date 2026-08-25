@@ -123,6 +123,24 @@ def test_tools_are_passed_through(tmp_path):
     assert transport.requests[0].payload["tools"] == tools
 
 
+def test_temperature_is_passed_through_when_set(tmp_path):
+    transport = FakeTransport()
+    client = make_client(tmp_path, transport)
+
+    client.complete(None, [{"role": "user", "content": "x"}], temperature=0.42)
+
+    assert transport.requests[0].payload["temperature"] == 0.42
+
+
+def test_no_temperature_key_by_default(tmp_path):
+    transport = FakeTransport()
+    client = make_client(tmp_path, transport)
+
+    client.complete(None, [{"role": "user", "content": "x"}])
+
+    assert "temperature" not in transport.requests[0].payload
+
+
 def test_no_tools_key_without_tools(tmp_path):
     transport = FakeTransport()
     client = make_client(tmp_path, transport)

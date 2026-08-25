@@ -165,6 +165,7 @@ class Client:
         cache_prefix: str | None = None,
         max_tokens: int | None = None,
         tools: Sequence[Mapping[str, Any]] | None = None,
+        temperature: float | None = None,
     ) -> Completion:
         payload: dict[str, Any] = {
             "model": self.spec.model_id,
@@ -173,6 +174,8 @@ class Client:
         }
         if tools:
             payload["tools"] = [dict(tool) for tool in tools]
+        if temperature is not None:
+            payload["temperature"] = temperature
         system_blocks = []
         if cache_prefix:
             system_blocks.append(
