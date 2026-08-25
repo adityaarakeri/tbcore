@@ -16,6 +16,7 @@ from tbcore.client import (
 from tbcore.models import REGISTRY, ModelSpec, resolve_model
 from tbcore.pool import ExecutionPool, WorkItem, WorkStore, enqueue
 from tbcore.sandbox import DEFAULT_ALLOW_HOSTS, RunResult, Sandbox, SandboxError, build_image
+from tbcore.stats import RegressionResult, Summary, regressed, summary
 
 __version__ = "0.1.0"
 
@@ -25,9 +26,11 @@ __all__ = [
     "DEFAULT_LOG_PATH",
     "ExecutionPool",
     "REGISTRY",
+    "RegressionResult",
     "RunResult",
     "Sandbox",
     "SandboxError",
+    "Summary",
     "CallLog",
     "Client",
     "Completion",
@@ -44,5 +47,7 @@ __all__ = [
     "__version__",
     "build_image",
     "enqueue",
+    "regressed",
     "resolve_model",
+    "summary",
 ]
