@@ -86,7 +86,7 @@ class Completion:
     text: str
     usage: Usage
     latency_s: float
-    model: str
+    model: str = ""
     stop_reason: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict)
 
