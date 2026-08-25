@@ -6,6 +6,7 @@ from tbcore.client import (
     Client,
     Completion,
     HttpTransport,
+    OpenAICompatTransport,
     RateLimitError,
     TbError,
     TransientError,
@@ -13,7 +14,7 @@ from tbcore.client import (
     TransportRequest,
     Usage,
 )
-from tbcore.models import REGISTRY, ModelSpec, resolve_model
+from tbcore.models import REGISTRY, ModelSpec, make_model_spec, resolve_model
 from tbcore.pool import ExecutionPool, WorkItem, WorkStore, enqueue
 from tbcore.sandbox import DEFAULT_ALLOW_HOSTS, RunResult, Sandbox, SandboxError, build_image
 from tbcore.stats import RegressionResult, Summary, regressed, summary
@@ -36,6 +37,7 @@ __all__ = [
     "Completion",
     "HttpTransport",
     "ModelSpec",
+    "OpenAICompatTransport",
     "RateLimitError",
     "Transport",
     "TransportRequest",
@@ -47,6 +49,7 @@ __all__ = [
     "__version__",
     "build_image",
     "enqueue",
+    "make_model_spec",
     "regressed",
     "resolve_model",
     "summary",

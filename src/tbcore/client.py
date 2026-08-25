@@ -43,7 +43,7 @@ class Transport(Protocol):
 
 
 class HttpTransport:
-    """Default transport: JSON POST against the Anthropic Messages API."""
+    """Anthropic wire: JSON POST against the Messages API."""
 
     def __init__(
         self, base_url: str = "https://api.anthropic.com", timeout_s: float = 60.0
@@ -55,6 +55,42 @@ class HttpTransport:
         body = json.dumps(request.payload).encode("utf-8")
         http_req = urllib.request.Request(
             f"{self.base_url}/v1/messages",
+            data=body,
+            headers=dict(request.headers),
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(http_req, timeout=self.timeout_s) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            if exc.code == 429:
+                raise RateLimitError(f"rate limited (429): {detail}") from exc
+            if exc.code >= 500:
+                raise TransientError(f"server error ({exc.code}): {detail}") from exc
+            raise APIStatusError(f"API error ({exc.code}): {detail}") from exc
+        except (urllib.error.URLError, TimeoutError) as exc:
+            raise TransientError(f"transport failure: {exc}") from exc
+
+
+class OpenAICompatTransport:
+    """OpenAI-compatible wire: POST ``/v1/chat/completions``.
+
+    Speaks to Ollama, LM Studio, vLLM, OpenAI itself, and any other server
+    exposing the chat-completions shape. A base URL ending in ``/v1`` is used
+    verbatim; otherwise ``/v1`` is appended. An API key is optional and sent
+    as a Bearer header when present.
+    """
+
+    def __init__(self, base_url: str = "http://localhost:11434", timeout_s: float = 60.0) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.timeout_s = timeout_s
+
+    def send(self, request: TransportRequest) -> dict[str, Any]:
+        suffix = "/chat/completions" if self.base_url.endswith("/v1") else "/v1/chat/completions"
+        body = json.dumps(request.payload).encode("utf-8")
+        http_req = urllib.request.Request(
+            f"{self.base_url}{suffix}",
             data=body,
             headers=dict(request.headers),
             method="POST",
@@ -123,18 +159,38 @@ def _parse_response(raw: Mapping[str, Any], latency_s: float, model_id: str) -> 
     )
 
 
+def _parse_openai_response(raw: Mapping[str, Any], latency_s: float, model_id: str) -> Completion:
+    choices = raw.get("choices") or []
+    message = (choices[0] or {}).get("message", {}) if choices else {}
+    usage_raw = raw.get("usage", {})
+    usage = Usage(
+        input_tokens=int(usage_raw.get("prompt_tokens", 0)),
+        output_tokens=int(usage_raw.get("completion_tokens", 0)),
+    )
+    return Completion(
+        text=str(message.get("content") or ""),
+        usage=usage,
+        latency_s=latency_s,
+        model=str(raw.get("model", model_id)),
+        stop_reason=(choices[0] or {}).get("finish_reason") if choices else None,
+        raw=dict(raw),
+    )
+
+
 class Client:
     """Single entry point for model calls: sends requests and logs every one.
 
-    ``model`` may be a short registry name (``sonnet``) or a raw model id.
-    When ``cache_prefix`` is passed to :meth:`complete`, the prefix is sent as a
-    cacheable system block so repeated calls with the same prefix hit the
-    provider's prompt cache.
+    ``model`` may be a short registry name (``sonnet``), a raw model id, or
+    an already-built :class:`~tbcore.models.ModelSpec` (use
+    :func:`tbcore.models.make_model_spec` for non-Anthropic providers such as
+    Ollama). When ``cache_prefix`` is passed to :meth:`complete`, the prefix
+    is sent as a cacheable system block so repeated calls with the same
+    prefix hit the provider's prompt cache (Anthropic wire only).
     """
 
     def __init__(
         self,
-        model: str,
+        model: str | ModelSpec,
         api_key: str | None = None,
         *,
         transport: Transport | None = None,
@@ -143,18 +199,24 @@ class Client:
         timeout_s: float = 60.0,
         max_tokens: int = 1024,
     ) -> None:
-        self.spec: ModelSpec = resolve_model(model)
-        if api_key is None:
+        self.spec: ModelSpec = model if isinstance(model, ModelSpec) else resolve_model(model)
+        if api_key is None and self.spec.api_key_env:
             api_key = os.environ.get(self.spec.api_key_env)
-        if not api_key:
+        if not api_key and self.spec.api_key_required:
             raise TbError(f"no API key: pass api_key= or set {self.spec.api_key_env}")
         self.api_key = api_key
         self.max_tokens_default = max_tokens
         if transport is not None:
             self.transport = transport
+        elif self.spec.wire == "openai-compat":
+            self.transport = OpenAICompatTransport(
+                base_url=self.spec.base_url or "http://localhost:11434",
+                timeout_s=timeout_s,
+            )
         else:
             self.transport = HttpTransport(
-                base_url=base_url or "https://api.anthropic.com", timeout_s=timeout_s
+                base_url=base_url or self.spec.base_url or "https://api.anthropic.com",
+                timeout_s=timeout_s,
             )
         self.log = log if log is not None else CallLog()
 
@@ -167,6 +229,39 @@ class Client:
         tools: Sequence[Mapping[str, Any]] | None = None,
         temperature: float | None = None,
     ) -> Completion:
+        if self.spec.wire == "openai-compat":
+            payload, headers, parse = self._build_openai_request(
+                system, messages, cache_prefix, max_tokens, tools, temperature
+            )
+        else:
+            payload, headers, parse = self._build_anthropic_request(
+                system, messages, cache_prefix, max_tokens, tools, temperature
+            )
+
+        start = time.perf_counter()
+        error: str | None = None
+        completion: Completion | None = None
+        try:
+            raw = self.transport.send(TransportRequest(payload=payload, headers=headers))
+            latency_s = time.perf_counter() - start
+            completion = parse(raw, latency_s, self.spec.model_id)
+            return completion
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
+            raise
+        finally:
+            latency_s = time.perf_counter() - start
+            self._record(payload, completion, latency_s, bool(cache_prefix), error)
+
+    def _build_anthropic_request(
+        self,
+        system: str | None,
+        messages: Sequence[Mapping[str, Any]],
+        cache_prefix: str | None,
+        max_tokens: int | None,
+        tools: Sequence[Mapping[str, Any]] | None,
+        temperature: float | None,
+    ) -> tuple[dict[str, Any], dict[str, str], Any]:
         payload: dict[str, Any] = {
             "model": self.spec.model_id,
             "max_tokens": max_tokens or self.max_tokens_default,
@@ -191,24 +286,39 @@ class Client:
             payload["system"] = system_blocks
         headers = {
             "content-type": "application/json",
-            "x-api-key": self.api_key,
+            "x-api-key": self.api_key or "",
             "anthropic-version": "2023-06-01",
         }
+        return payload, headers, _parse_response
 
-        start = time.perf_counter()
-        error: str | None = None
-        completion: Completion | None = None
-        try:
-            raw = self.transport.send(TransportRequest(payload=payload, headers=headers))
-            latency_s = time.perf_counter() - start
-            completion = _parse_response(raw, latency_s, self.spec.model_id)
-            return completion
-        except Exception as exc:
-            error = f"{type(exc).__name__}: {exc}"
-            raise
-        finally:
-            latency_s = time.perf_counter() - start
-            self._record(payload, completion, latency_s, bool(cache_prefix), error)
+    def _build_openai_request(
+        self,
+        system: str | None,
+        messages: Sequence[Mapping[str, Any]],
+        cache_prefix: str | None,
+        max_tokens: int | None,
+        tools: Sequence[Mapping[str, Any]] | None,
+        temperature: float | None,
+    ) -> tuple[dict[str, Any], dict[str, str], Any]:
+        if cache_prefix:
+            raise TbError("prompt-prefix caching is only supported on the anthropic wire")
+        if tools:
+            raise TbError("tools are not yet supported on the openai-compat wire")
+        chat_messages: list[dict[str, Any]] = []
+        if system:
+            chat_messages.append({"role": "system", "content": system})
+        chat_messages.extend(_message(m) for m in messages)
+        payload = {
+            "model": self.spec.model_id,
+            "max_tokens": max_tokens or self.max_tokens_default,
+            "messages": chat_messages,
+        }
+        if temperature is not None:
+            payload["temperature"] = temperature
+        headers = {"content-type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return payload, headers, _parse_openai_response
 
     def _record(
         self,
