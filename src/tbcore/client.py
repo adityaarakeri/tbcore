@@ -163,9 +163,11 @@ def _parse_openai_response(raw: Mapping[str, Any], latency_s: float, model_id: s
     choices = raw.get("choices") or []
     message = (choices[0] or {}).get("message", {}) if choices else {}
     usage_raw = raw.get("usage", {})
+    prompt_details = usage_raw.get("prompt_tokens_details") or {}
     usage = Usage(
         input_tokens=int(usage_raw.get("prompt_tokens", 0)),
         output_tokens=int(usage_raw.get("completion_tokens", 0)),
+        cache_read_input_tokens=int(prompt_details.get("cached_tokens", 0)),
     )
     return Completion(
         text=str(message.get("content") or ""),

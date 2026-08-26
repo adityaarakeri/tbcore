@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/) and the project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- OpenAI-compatible wire (`openai-compat`): talk to Ollama, vLLM, LM Studio,
+  OpenAI, or any `/v1/chat/completions` endpoint via `make_model_spec(...)`
+  and `Client(spec)`; Bearer auth is sent when an API key is present.
+- `temperature` passthrough and `tools` passthrough (Anthropic wire).
+- Registry shortcuts `gpt-4o` and `gpt-4o-mini` targeting OpenAI cloud with
+  registered prices; `vllm` provider convenience in `make_model_spec`.
+- Cached-input tokens from OpenAI-style `prompt_tokens_details.cached_tokens`
+  are now recorded as cache reads in accounting.
+
 ## [0.1.0] - 2026-08-24
 
 ### Added

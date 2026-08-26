@@ -40,6 +40,29 @@ print(completion.text, completion.usage, completion.latency_s)
 Every call is appended as one JSON line to `.tbcore/calls.jsonl`
 (configurable via `CallLog`).
 
+## Providers
+
+Anthropic is the default. For Ollama, vLLM, LM Studio, OpenAI, or any other
+OpenAI-compatible endpoint, build a spec with `make_model_spec` (or use a
+registered shortcut):
+
+```python
+from tbcore import Client, make_model_spec
+
+claude = Client("sonnet")  # ANTHROPIC_API_KEY
+local = Client(make_model_spec("qwen3:8b", provider="ollama"))  # localhost:11434
+served = Client(make_model_spec("org/model", provider="vllm"))  # localhost:8000
+gpt = Client("gpt-4o-mini")  # OPENAI_API_KEY
+```
+
+Notes:
+
+- An API key is sent as `Authorization: Bearer ...` on the OpenAI-compatible
+  wire when available; Ollama/vLLM need none by default.
+- `cache_prefix` uses Anthropic prompt caching and raises on the
+  OpenAI-compatible wire; `tools` is Anthropic-wire only for now.
+- Cost-equivalent uses registered prices; unpriced local models log `$0`.
+
 ## Development
 
 ```bash

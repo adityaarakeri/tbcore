@@ -8,11 +8,12 @@ from tbcore.accounting import CallLog
 from tbcore.client import (
     APIStatusError,
     Client,
+    OpenAICompatTransport,
     RateLimitError,
     TbError,
     TransientError,
 )
-from tbcore.models import ModelSpec, make_model_spec
+from tbcore.models import ModelSpec, make_model_spec, resolve_model
 
 
 class FakeTransport:
@@ -63,6 +64,68 @@ def test_make_model_spec_anthropic_resolves_registry():
 def test_make_model_spec_rejects_unknown_provider():
     with pytest.raises(ValueError, match="provider"):
         make_model_spec("x", provider="smoketest")
+
+
+def test_gpt_4o_mini_registry_entry_targets_openai():
+    spec = resolve_model("gpt-4o-mini")
+
+    assert spec.wire == "openai-compat"
+    assert spec.api_key_env == "OPENAI_API_KEY"
+    assert spec.api_key_required is True
+    assert spec.base_url == "https://api.openai.com/v1"
+
+
+def test_client_selects_openai_transport_for_registry_entry(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-env-123")
+
+    client = Client("gpt-4o-mini", log=CallLog(tmp_path / "calls.jsonl"))
+
+    assert isinstance(client.transport, OpenAICompatTransport)
+    assert client.transport.base_url == "https://api.openai.com/v1"
+    assert client.api_key == "sk-env-123"
+
+
+def test_cached_prompt_tokens_surface_in_usage(tmp_path):
+    transport = FakeTransport(
+        response={
+            "model": "qwen3:8b",
+            "choices": [
+                {"message": {"role": "assistant", "content": "hi"}, "finish_reason": "stop"}
+            ],
+            "usage": {
+                "prompt_tokens": 20,
+                "completion_tokens": 4,
+                "prompt_tokens_details": {"cached_tokens": 12},
+            },
+        }
+    )
+
+    completion = ollama_client(tmp_path, transport).complete(
+        None, [{"role": "user", "content": "hi"}]
+    )
+
+    assert completion.usage.input_tokens == 20
+    assert completion.usage.output_tokens == 4
+    assert completion.usage.cache_read_input_tokens == 12
+
+
+def test_make_model_spec_vllm_defaults():
+    spec = make_model_spec("meta-llama/Llama-3.1-8B-Instruct", provider="vllm")
+
+    assert spec.wire == "openai-compat"
+    assert spec.provider == "vllm"
+    assert spec.base_url == "http://localhost:8000"
+    assert spec.api_key_required is False
+
+
+def test_make_model_spec_vllm_base_url_override():
+    spec = make_model_spec(
+        "meta-llama/Llama-3.1-8B-Instruct",
+        provider="vllm",
+        base_url="http://gpu-box:9000",
+    )
+
+    assert spec.base_url == "http://gpu-box:9000"
 
 
 def test_openai_chat_payload_shape(tmp_path):

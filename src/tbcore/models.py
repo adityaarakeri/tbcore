@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434"
+VLLM_DEFAULT_BASE_URL = "http://localhost:8000"
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,28 @@ REGISTRY: dict[str, ModelSpec] = {
     "haiku": ModelSpec(
         "haiku", "claude-haiku-4-5-20251001", input_per_mtok=1.0, output_per_mtok=5.0
     ),
+    "gpt-4o": ModelSpec(
+        "gpt-4o",
+        "gpt-4o",
+        provider="openai",
+        api_key_env="OPENAI_API_KEY",
+        input_per_mtok=2.50,
+        output_per_mtok=10.00,
+        cache_read_multiplier=0.5,
+        wire="openai-compat",
+        base_url="https://api.openai.com/v1",
+    ),
+    "gpt-4o-mini": ModelSpec(
+        "gpt-4o-mini",
+        "gpt-4o-mini",
+        provider="openai",
+        api_key_env="OPENAI_API_KEY",
+        input_per_mtok=0.15,
+        output_per_mtok=0.60,
+        cache_read_multiplier=0.5,
+        wire="openai-compat",
+        base_url="https://api.openai.com/v1",
+    ),
 }
 
 
@@ -73,6 +96,9 @@ def make_model_spec(
       Messages API wire; requires ``ANTHROPIC_API_KEY``.
     - ``ollama`` - OpenAI-compatible chat completions against a local server
       (default ``http://localhost:11434``); no API key required.
+    - ``vllm`` - OpenAI-compatible chat completions against a vLLM server
+      (default ``http://localhost:8000``); an API key is optional and sent as
+      a Bearer header when provided or present in ``VLLM_API_KEY``.
     - ``openai-compat`` - any OpenAI-compatible endpoint; ``base_url``
       required. An API key is optional and sent as a Bearer header when
       provided.
@@ -93,6 +119,16 @@ def make_model_spec(
             base_url=base_url or OLLAMA_DEFAULT_BASE_URL,
             api_key_required=False,
         )
+    if p == "vllm":
+        return ModelSpec(
+            short_name=name_or_id,
+            model_id=name_or_id,
+            provider="vllm",
+            api_key_env=api_key_env or "VLLM_API_KEY",
+            wire="openai-compat",
+            base_url=base_url or VLLM_DEFAULT_BASE_URL,
+            api_key_required=False,
+        )
     if p in ("openai-compat", "openai"):
         if not base_url:
             raise ValueError(
@@ -108,7 +144,7 @@ def make_model_spec(
             api_key_required=False,
         )
     raise ValueError(
-        f"unsupported provider {provider!r}; expected anthropic, ollama, or openai-compat"
+        f"unsupported provider {provider!r}; expected anthropic, ollama, vllm, or openai-compat"
     )
 
 
