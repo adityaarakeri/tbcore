@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pytest
 
@@ -98,3 +100,112 @@ def test_empty_samples_raise():
         summary([])
     with pytest.raises(ValueError):
         regressed([], [1.0])
+
+
+def test_regressed_higher_is_better_flags_lower_candidate():
+    rng = np.random.default_rng(SEED)
+    baseline = rng.normal(1.0, 1.0, size=200)
+    candidate = rng.normal(0.0, 1.0, size=200)
+
+    default = regressed(baseline, candidate)
+    result = regressed(baseline, candidate, higher_is_better=True)
+
+    assert default.regressed is False
+    assert result.regressed is True
+    assert result.p_value < 1e-6
+    assert result.effect_size < 0  # sign convention: negative means candidate is lower
+
+
+def test_regressed_higher_is_better_does_not_flag_higher_candidate():
+    rng = np.random.default_rng(SEED)
+    baseline = rng.normal(0.0, 1.0, size=200)
+    candidate = rng.normal(1.0, 1.0, size=200)
+
+    assert regressed(baseline, candidate, higher_is_better=True).regressed is False
+    assert regressed(baseline, candidate).regressed is True
+
+
+def test_cohens_d_is_nan_for_too_little_data():
+    assert np.isnan(cohens_d([1.0], [2.0]))
+
+
+def test_cohens_d_is_nan_for_zero_pooled_variance():
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert np.isnan(cohens_d([1.0, 1.0, 1.0], [2.0, 2.0, 2.0]))
+        assert np.isnan(cohens_d([3.0, 3.0], [3.0, 3.0]))
+
+
+def test_cohens_d_with_one_singleton_group_is_finite():
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert np.isfinite(cohens_d([1.0], [2.0, 4.0]))
+
+
+def test_stats_helpers_are_exported():
+    import tbcore
+
+    assert tbcore.bootstrap_ci is bootstrap_ci
+    assert tbcore.cohens_d is cohens_d
+
+
+@pytest.mark.parametrize("alpha", [0, 1, -0.1, 1.1, float("nan"), float("inf"), -float("inf")])
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda alpha: bootstrap_ci([1, 2], alpha=alpha),
+        lambda alpha: summary([1, 2], alpha=alpha),
+        lambda alpha: summary([1], alpha=alpha),
+        lambda alpha: regressed([1, 2], [2, 3], alpha=alpha),
+    ],
+)
+def test_invalid_alpha_raises_at_public_entry_points(alpha, call):
+    with pytest.raises(ValueError, match="alpha must be finite and strictly between 0 and 1"):
+        call(alpha)
+
+
+@pytest.mark.parametrize("iterations", [0, -1, 1.5, float("nan"), float("inf"), True, False, "3"])
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda iterations: bootstrap_ci([1, 2], iterations=iterations),
+        lambda iterations: summary([1, 2], iterations=iterations),
+        lambda iterations: summary([1], iterations=iterations),
+    ],
+)
+def test_invalid_iterations_raise_at_public_entry_points(iterations, call):
+    with pytest.raises(ValueError, match="iterations must be a positive integer"):
+        call(iterations)
+
+
+def test_numpy_integer_iterations_are_accepted():
+    result = bootstrap_ci([1, 2], iterations=np.int64(10), rng=np.random.default_rng(SEED))
+
+    assert result[0] <= result[1]
+
+
+def test_bootstrap_ci_bounds_resampling_allocation():
+    class GuardedRng:
+        def __init__(self):
+            self.generator = np.random.default_rng(SEED)
+            self.calls = 0
+
+        def integers(self, low, high, *, size):
+            assert size[0] * size[1] <= 1_000_000
+            self.calls += 1
+            return self.generator.integers(low, high, size=size)
+
+    rng = GuardedRng()
+    low, high = bootstrap_ci(np.arange(10_000), iterations=200, rng=rng)
+
+    assert rng.calls > 1
+    assert low <= high
+
+
+def test_batched_bootstrap_matches_seeded_bulk_reference():
+    samples = np.arange(1001, dtype=float)
+    iterations = 1000
+    indexes = np.random.default_rng(SEED).integers(0, samples.size, size=(iterations, samples.size))
+    expected = tuple(np.quantile(samples[indexes].mean(axis=1), [0.025, 0.975]))
+
+    assert bootstrap_ci(samples, iterations=iterations, rng=np.random.default_rng(SEED)) == expected

@@ -6,7 +6,7 @@ from tbcore.accounting import CallLog
 from tbcore.client import Client, Completion, RateLimitError, TbError, TransportRequest
 from tbcore.models import resolve_model
 
-SONNET_ID = "claude-sonnet-4-5-20250929"
+SONNET_ID = "claude-sonnet-5-5"
 
 
 class FakeTransport:
@@ -204,3 +204,76 @@ def test_http_transport_maps_5xx_to_transient_error(tmp_path, monkeypatch):
 
     with pytest.raises(TransientError):
         transport.send(request)
+
+
+def _http_error(status, headers=None):
+    import urllib.error
+
+    return urllib.error.HTTPError("http://x", status, "boom", headers or {}, None)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("7", 7.0), ("1.5", 1.5), ("0", 0.0), ("-3", 0.0), (None, None), ("", None), ("soon", None)],
+)
+def test_parse_retry_after_seconds(value, expected):
+    from tbcore.client import parse_retry_after
+
+    assert parse_retry_after(value) == expected
+
+
+def test_parse_retry_after_http_date():
+    from datetime import UTC, datetime
+
+    from tbcore.client import parse_retry_after
+
+    now = datetime(2026, 10, 13, 12, 0, 0, tzinfo=UTC)
+
+    assert parse_retry_after("Tue, 13 Oct 2026 12:00:30 GMT", now=now) == pytest.approx(30.0)
+    assert parse_retry_after("Tue, 13 Oct 2026 11:00:00 GMT", now=now) == 0.0
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"), [(429, RateLimitError), (503, "transient"), (529, "transient")]
+)
+def test_retry_after_header_lands_on_exception(monkeypatch, status, expected):
+    from tbcore.client import HttpTransport, TransientError
+
+    def raise_http_error(req, timeout):
+        raise _http_error(status, {"Retry-After": "12"})
+
+    monkeypatch.setattr("urllib.request.urlopen", raise_http_error)
+    exc_type = TransientError if expected == "transient" else expected
+
+    with pytest.raises(exc_type) as info:
+        HttpTransport().send(TransportRequest(payload={}, headers={}))
+
+    assert info.value.retry_after == 12.0
+
+
+def test_retry_after_defaults_to_none(monkeypatch):
+    from tbcore.client import HttpTransport
+
+    def raise_http_error(req, timeout):
+        raise _http_error(429)
+
+    monkeypatch.setattr("urllib.request.urlopen", raise_http_error)
+
+    with pytest.raises(RateLimitError) as info:
+        HttpTransport().send(TransportRequest(payload={}, headers={}))
+
+    assert info.value.retry_after is None
+
+
+def test_error_constructors_stay_backward_compatible():
+    from tbcore.client import TransientError
+
+    assert RateLimitError("429").retry_after is None
+    assert str(RateLimitError("429", retry_after=3)) == "429"
+    assert TransientError("x", retry_after=1.5).retry_after == 1.5
+
+
+def test_client_base_url_is_honored_on_anthropic_wire():
+    client = Client("sonnet", api_key="k", base_url="http://gateway.local", log=CallLog(None))
+
+    assert client.transport.base_url == "http://gateway.local"

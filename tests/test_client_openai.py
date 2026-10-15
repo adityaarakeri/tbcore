@@ -104,7 +104,8 @@ def test_cached_prompt_tokens_surface_in_usage(tmp_path):
         None, [{"role": "user", "content": "hi"}]
     )
 
-    assert completion.usage.input_tokens == 20
+    # prompt_tokens (20) includes the 12 cached tokens; only 8 are uncached input.
+    assert completion.usage.input_tokens == 8
     assert completion.usage.output_tokens == 4
     assert completion.usage.cache_read_input_tokens == 12
 
@@ -265,3 +266,20 @@ def test_openai_transport_url_composition(monkeypatch):
         type("R", (), {"payload": {"a": 1}, "headers": {}})()
     )
     assert captured["url"] == "http://localhost:11434/v1/chat/completions"
+
+
+def test_client_base_url_is_honored_on_openai_wire():
+    client = Client(
+        make_model_spec("qwen3:8b", provider="ollama"),
+        base_url="http://gateway.local:9000/v1",
+        log=CallLog(None),
+    )
+
+    assert isinstance(client.transport, OpenAICompatTransport)
+    assert client.transport.base_url == "http://gateway.local:9000/v1"
+
+
+def test_openai_wire_keeps_spec_base_url_without_override():
+    client = Client(make_model_spec("qwen3:8b", provider="ollama"), log=CallLog(None))
+
+    assert client.transport.base_url == "http://localhost:11434"

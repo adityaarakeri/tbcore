@@ -1,12 +1,10 @@
 import subprocess
 import time
 import uuid
-from pathlib import Path
 
 import pytest
 
-from tbcore.sandbox import Sandbox, build_image
-from tbcore.testing import docker_available
+from tbcore.sandbox import Sandbox
 
 pytestmark = pytest.mark.docker
 
@@ -24,26 +22,6 @@ ALLOW_SCRIPT = (
     "print(urllib.request.urlopen('http://upstream.test:8000/hello.txt', "
     "timeout=8).read().decode())\n"
 )
-
-
-def _repo_dir() -> Path:
-    return Path(__file__).resolve().parents[1]
-
-
-@pytest.fixture(scope="session")
-def sandbox_image(require_docker):
-    return build_image(_repo_dir() / "sandbox", "tbcore-dev-sandbox:test")
-
-
-@pytest.fixture(scope="session")
-def proxy_image(require_docker):
-    return build_image(_repo_dir() / "sandbox" / "proxy", "tbcore-dev-proxy:test")
-
-
-@pytest.fixture(scope="session")
-def require_docker():
-    if not docker_available():
-        pytest.skip("docker runtime not available")
 
 
 @pytest.fixture
@@ -80,6 +58,22 @@ def test_files_are_available_in_the_workdir(sandbox):
 
     assert result.exit_code == 0
     assert result.stdout.strip() == "hi there"
+
+
+def test_runs_as_non_root_with_no_capabilities(sandbox):
+    result = sandbox.run(["bash", "-c", "id -u; grep CapEff /proc/self/status"])
+
+    assert result.exit_code == 0, result.stderr
+    assert result.stdout.splitlines()[0] == "1000"
+    assert result.stdout.split("CapEff:")[1].strip() == "0000000000000000"
+
+
+def test_env_vars_reach_the_command(sandbox):
+    result = sandbox.run(
+        ["bash", "-c", 'printf %s "$TBCORE_TEST_SECRET"'], env={"TBCORE_TEST_SECRET": "s3cret"}
+    )
+
+    assert result.stdout == "s3cret"
 
 
 def test_filesystem_is_fresh_per_run(sandbox):

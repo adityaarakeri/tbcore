@@ -1,0 +1,3 @@
+# Normalize text to LF everywhere, including Windows checkouts, so image build
+# contexts (Dockerfiles, proxy.py) are identical to what the wheel ships.
+* text=auto eol=lf
