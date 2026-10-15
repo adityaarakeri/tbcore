@@ -633,6 +633,9 @@ class Sandbox:
         run_args = [
             "run",
             "-d",
+            # The proxy holds injected credentials: never let a missing local image be
+            # resolved by an implicit registry pull.
+            "--pull=never",
             "--name",
             name,
             "--network",

@@ -75,6 +75,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Sandbox and proxy base images are pinned by digest
   (`python:3.11-slim@sha256:e88e9763...`). The proxy container gets memory, CPU, and PID
   limits, dropped capabilities, and `no-new-privileges`.
+- **Behavior change: the proxy container starts with `--pull=never`.** A missing
+  `proxy_image` now fails with a hint to run `build_default_images()` instead of being
+  pulled from a registry (the default `tbcore/proxy:latest` name is not a published image).
+  Requires Docker 20.10+.
 - Sandbox containers are now removed with `docker rm -f -v` so anonymous volumes cannot leak.
   The docker create arguments for `run()` are unchanged unless a new option is used.
 - The proxy container now runs as the unprivileged `proxy` user and listens on 3128 (and 8080

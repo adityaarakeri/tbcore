@@ -58,6 +58,8 @@ defense-in-depth layer, not a hardened isolation boundary.
 - Runs the proxy container as an unprivileged user (Debian's `proxy`, uid 13) with all
   capabilities dropped; its listen ports (3128, 8080) are unprivileged.
 - Pins the base images by digest.
+- Starts the proxy with `--pull=never`, so a missing local proxy image fails instead of
+  being pulled from a registry. Build it with `build_default_images()` first.
 
 ### What it does not protect against
 

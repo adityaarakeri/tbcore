@@ -202,6 +202,16 @@ def test_proxy_container_has_resource_limits_and_dropped_caps(fake_docker, tmp_p
     assert "TBCORE_ALLOW_HOSTS=example.com" in run
 
 
+def test_proxy_image_is_never_pulled_implicitly(fake_docker, tmp_path):
+    box = Sandbox("img:test", allow_hosts=("example.com",), work_root=tmp_path)
+
+    box.prepare()
+
+    run = fake_docker.first("run")
+    assert "--pull=never" in run
+    assert run.index("--pull=never") < run.index(box.proxy_image)
+
+
 def test_proxy_telemetry_identity_is_bound_by_host(fake_docker, tmp_path):
     box = Sandbox(
         "img:test",
