@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434"
@@ -25,28 +25,69 @@ class ModelSpec:
     wire: str = "anthropic"
     base_url: str | None = None
     api_key_required: bool = True
+    # Optional long-prompt tier: when the full prompt (input + cache reads + cache
+    # writes) exceeds the threshold, the long rates replace the base rates.
+    long_prompt_threshold: int | None = None
+    long_input_per_mtok: float = 0.0
+    long_output_per_mtok: float = 0.0
+
+    @property
+    def priced(self) -> bool:
+        """True when this spec has registered prices (otherwise cost is unknown, not zero)."""
+        return self.input_per_mtok > 0.0 or self.output_per_mtok > 0.0
 
     def cost(self, usage: Any) -> float:
-        """Cost-equivalent in USD for a usage object with token count fields."""
+        """Cost-equivalent in USD for a usage object with token count fields.
+
+        Returns 0.0 for unpriced specs; check :attr:`priced` to tell that apart from free.
+        """
+        prompt_tokens = (
+            usage.input_tokens + usage.cache_creation_input_tokens + usage.cache_read_input_tokens
+        )
+        input_rate, output_rate = self.input_per_mtok, self.output_per_mtok
+        if self.long_prompt_threshold is not None and prompt_tokens > self.long_prompt_threshold:
+            input_rate, output_rate = self.long_input_per_mtok, self.long_output_per_mtok
         billed_input = (
             usage.input_tokens
             + usage.cache_creation_input_tokens * self.cache_write_multiplier
             + usage.cache_read_input_tokens * self.cache_read_multiplier
         )
-        return (
-            billed_input * self.input_per_mtok + usage.output_tokens * self.output_per_mtok
-        ) / 1_000_000
+        return float((billed_input * input_rate + usage.output_tokens * output_rate) / 1_000_000)
 
 
+# Anthropic prices: https://platform.claude.com/docs/en/about-claude/pricing (2026-10-13).
+# Cache writes are 1.25x base input (5m); cache reads are 0.05x on Opus/Sonnet 5.5 and 0.025x
+# on Fable 5.1. Haiku 5.5 switches to its long-prompt tier above 100k prompt tokens.
 REGISTRY: dict[str, ModelSpec] = {
     "opus": ModelSpec(
-        "opus", "claude-opus-4-1-20250805", input_per_mtok=15.0, output_per_mtok=75.0
+        "opus",
+        "claude-opus-5-5",
+        input_per_mtok=4.0,
+        output_per_mtok=20.0,
+        cache_read_multiplier=0.05,
     ),
     "sonnet": ModelSpec(
-        "sonnet", "claude-sonnet-4-5-20250929", input_per_mtok=3.0, output_per_mtok=15.0
+        "sonnet",
+        "claude-sonnet-5-5",
+        input_per_mtok=2.0,
+        output_per_mtok=10.0,
+        cache_read_multiplier=0.05,
     ),
     "haiku": ModelSpec(
-        "haiku", "claude-haiku-4-5-20251001", input_per_mtok=1.0, output_per_mtok=5.0
+        "haiku",
+        "claude-haiku-5-5",
+        input_per_mtok=0.10,
+        output_per_mtok=0.50,
+        long_prompt_threshold=100_000,
+        long_input_per_mtok=0.50,
+        long_output_per_mtok=2.50,
+    ),
+    "fable": ModelSpec(
+        "fable",
+        "claude-fable-5-1",
+        input_per_mtok=10.0,
+        output_per_mtok=50.0,
+        cache_read_multiplier=0.025,
     ),
     "gpt-4o": ModelSpec(
         "gpt-4o",
@@ -149,7 +190,5 @@ def make_model_spec(
 
 
 def _replace(spec: ModelSpec, **changes: Any) -> ModelSpec:
-    from dataclasses import replace as _dataclass_replace
-
     changes = {k: v for k, v in changes.items() if v is not None}
-    return _dataclass_replace(spec, **changes) if changes else spec
+    return replace(spec, **changes) if changes else spec

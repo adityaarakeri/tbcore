@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "specification": {
+    "experiment_id": "[redacted-spec-id]",
+    "task_id": "edit-task",
+    "configuration": {
+      "configuration_id": "candidate",
+      "dataset_version": "fixture-v1"
+    },
+    "workspace_ref": "[sha256-of-captured-inputs]",
+    "environment_ref": "[sha256-of-environment]"
+  },
+  "run": {
+    "run_id": "[redacted-run-id]",
+    "trial_id": "[redacted-trial-id]",
+    "attempt_id": "[redacted-attempt-id]",
+    "status": "completed",
+    "artifact_ids": ["answer.txt"],
+    "evaluation_ids": ["[redacted-evaluation-id]"]
+  },
+  "events": [
+    {"sequence": 1, "fields": {"event_type": "sandbox_command", "exit_code": 0}},
+    {"sequence": 2, "fields": {"event_type": "evaluation", "verdict": "pass"}}
+  ],
+  "artifacts": [
+    {"name": "answer.txt", "sha256": "[sha256-of-redacted-content]", "content_base64": "[redacted]"}
+  ],
+  "workspaces": {"[snapshot-id]": {"manifest": "[redacted]", "blobs": ["[redacted]"]}},
+  "environments": {"[environment-id]": "[redacted]"},
+  "redaction_note": "Illustrative structure only; placeholders are not importable."
+}

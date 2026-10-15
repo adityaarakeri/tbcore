@@ -8,11 +8,12 @@ import json
 import random
 import sqlite3
 import threading
-from collections.abc import Iterable, Mapping
+import time
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from tbcore.client import RateLimitError, TransientError
+from tbcore.client import Completion, RateLimitError, RetryableError, TransientError
 
 TRANSIENT_EXCEPTIONS = (RateLimitError, TransientError, ConnectionError, TimeoutError)
 
@@ -94,6 +95,14 @@ class WorkStore:
                 (json.dumps(dict(result), ensure_ascii=False), item_id),
             )
 
+    def record_retry(self, item_id: int, error: str) -> None:
+        """Count a failed attempt without releasing the running row to another worker."""
+        with self._lock:
+            self.conn.execute(
+                f"UPDATE work SET error=?, attempts=attempts+1, {_UPDATED_AT} WHERE id=?",
+                (error[:2000], item_id),
+            )
+
     def mark_failed(self, item_id: int, error: str, *, exhaust_at: int | None = None) -> None:
         """Record a failure and bump attempts.
 
@@ -133,6 +142,20 @@ class WorkStore:
         self.conn.close()
 
 
+def _result_row(completion: Completion) -> dict[str, Any]:
+    usage = completion.usage
+    return {
+        "text": completion.text,
+        "usage": {
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+            "cache_read_input_tokens": usage.cache_read_input_tokens,
+            "cache_creation_input_tokens": usage.cache_creation_input_tokens,
+        },
+        "latency_s": round(completion.latency_s, 6),
+    }
+
+
 def enqueue(store: WorkStore, payloads: Iterable[Mapping[str, Any]]) -> int:
     """Insert pending rows for each payload."""
     return store.enqueue(payloads)
@@ -145,6 +168,11 @@ class ExecutionPool:
     backoff until ``max_attempts``; exhausted rows stay ``failed``. Calling
     :meth:`run` again resumes: only ``pending`` rows and ``failed`` rows under
     the retry cap are processed, so completed work is never redone.
+
+    A server ``Retry-After`` hint raises the backoff floor. When any worker is
+    rate limited, the whole pool pauses until that worker's backoff elapses, so
+    sibling workers do not hammer the limit. ``sleeper`` and ``clock`` are
+    injectable for tests (``clock`` must be monotonic seconds).
     """
 
     def __init__(
@@ -157,7 +185,8 @@ class ExecutionPool:
         base_delay: float = 0.5,
         max_delay: float = 60.0,
         jitter: float = 0.1,
-        sleeper=None,
+        sleeper: Callable[[float], Awaitable[object]] | None = None,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         if concurrency < 1:
             raise ValueError("concurrency must be >= 1")
@@ -168,11 +197,15 @@ class ExecutionPool:
         self.base_delay = base_delay
         self.max_delay = max_delay
         self.jitter = jitter
-        self.sleeper = sleeper or asyncio.sleep
+        self.sleeper: Callable[[float], Awaitable[object]] = sleeper or asyncio.sleep
+        self._clock: Callable[[], float] = clock or time.monotonic
+        # Pool-wide "do not call before" time on the injected clock.
+        self._resume_at = float("-inf")
 
     async def run(self) -> dict[str, int]:
         """Drain all claimable work; returns per-status row counts."""
         self.store.reclaim_running()
+        self._resume_at = float("-inf")
         await asyncio.gather(*(self._worker() for _ in range(self.concurrency)))
         return self.store.counts()
 
@@ -190,48 +223,69 @@ class ExecutionPool:
                 item.id, "payload missing 'messages'", exhaust_at=self.max_attempts
             )
             return
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "system": payload.get("system"),
             "messages": payload["messages"],
             "cache_prefix": payload.get("cache_prefix"),
         }
+        # Forwarded only when present so clients without these kwargs keep working.
+        for key in ("max_tokens", "temperature", "tools"):
+            if payload.get(key) is not None:
+                kwargs[key] = payload[key]
         attempts = item.attempts
+        own_pause: float | None = None
         while True:
+            await self._wait_for_pause(skip=own_pause)
             try:
                 completion = await self._invoke(**kwargs)
             except TRANSIENT_EXCEPTIONS as exc:
                 attempts += 1
-                self.store.mark_failed(item.id, f"{type(exc).__name__}: {exc}")
+                error = f"{type(exc).__name__}: {exc}"
+                hint = exc.retry_after if isinstance(exc, RetryableError) else None
+                delay = max(self._delay(attempts), hint or 0.0)
+                if isinstance(exc, RateLimitError):
+                    own_pause = self._pause_for(delay)
                 if attempts >= self.max_attempts:
+                    self.store.mark_failed(item.id, error)
                     return
-                await self.sleeper(self._delay(attempts))
+                self.store.record_retry(item.id, error)
+                await self.sleeper(delay)
             except Exception as exc:
                 self.store.mark_failed(
                     item.id, f"{type(exc).__name__}: {exc}", exhaust_at=self.max_attempts
                 )
                 return
             else:
-                self.store.mark_done(
-                    item.id,
-                    {
-                        "text": completion.text,
-                        "usage": {
-                            "input_tokens": completion.usage.input_tokens,
-                            "output_tokens": completion.usage.output_tokens,
-                        },
-                        "latency_s": round(completion.latency_s, 6),
-                    },
-                )
+                self.store.mark_done(item.id, _result_row(completion))
                 return
 
-    async def _invoke(self, **kwargs):
+    def _pause_for(self, delay: float) -> float:
+        """Extend the pool-wide pause to ``now + delay``; returns the new resume time."""
+        self._resume_at = max(self._resume_at, self._clock() + delay)
+        return self._resume_at
+
+    async def _wait_for_pause(self, skip: float | None = None) -> None:
+        """Wait out the pool-wide pause, unless this worker already slept through it."""
+        while True:
+            target = self._resume_at
+            remaining = target - self._clock()
+            if remaining <= 0 or target == skip:
+                return
+            await self.sleeper(remaining)
+            if self._resume_at == target:
+                return
+
+    async def _invoke(self, **kwargs: Any) -> Completion:
         complete = self.client.complete
+        completion: Completion
         if inspect.iscoroutinefunction(complete):
-            return await complete(**kwargs)
-        return await asyncio.to_thread(complete, **kwargs)
+            completion = await complete(**kwargs)
+        else:
+            completion = await asyncio.to_thread(complete, **kwargs)
+        return completion
 
     def _delay(self, attempt: int) -> float:
-        delay = min(self.base_delay * (2 ** (attempt - 1)), self.max_delay)
+        delay = min(self.base_delay * 2.0 ** (attempt - 1), self.max_delay)
         if self.jitter:
             delay *= 1.0 + random.uniform(0.0, self.jitter)
         return delay
