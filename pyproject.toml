@@ -27,7 +27,11 @@ dependencies = [
     "scipy>=1.13,<2",
 ]
 
-# TODO: add [project.urls] (Homepage, Source, Issues) once the public repository exists.
+[project.urls]
+Homepage = "https://github.com/adityaarakeri/tbcore"
+Source = "https://github.com/adityaarakeri/tbcore"
+Issues = "https://github.com/adityaarakeri/tbcore/issues"
+Changelog = "https://github.com/adityaarakeri/tbcore/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [

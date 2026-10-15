@@ -11,3 +11,5 @@ venv/
 .coverage
 htmlcov/
 .tbcore/
+CHECKLIST.md
+.agent/
