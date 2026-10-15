@@ -173,3 +173,93 @@ def test_completed_run_surfaces_missing_artifact_after_open(tmp_path):
     with pytest.raises(ValueError, match="artifact"):
         store.get_run("run-1")
     store.close()
+
+
+class _GuardedCursor:
+    def __init__(self, cursor, lock):
+        self._cursor = cursor
+        self._lock = lock
+
+    def _check(self):
+        assert self._lock._is_owned(), "store cursor read without holding the store lock"
+
+    def fetchone(self):
+        self._check()
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        self._check()
+        return self._cursor.fetchall()
+
+    def __iter__(self):
+        self._check()
+        return iter(self._cursor.fetchall())
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+
+class _GuardedConnection:
+    """Fails any query or fetch made without the store's lock held by this thread."""
+
+    def __init__(self, conn, lock):
+        self._conn = conn
+        self._lock = lock
+
+    def execute(self, *args):
+        assert self._lock._is_owned(), "store connection used without holding the store lock"
+        return _GuardedCursor(self._conn.execute(*args), self._lock)
+
+    def close(self):
+        assert self._lock._is_owned(), "store connection closed without holding the store lock"
+        self._conn.close()
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+def test_every_connection_use_holds_the_store_lock(tmp_path):
+    store = ExperimentStore(tmp_path / "store", CapturePolicy(content_enabled=True))
+    store.conn = _GuardedConnection(store.conn, store._lock)
+
+    store.add_spec(_spec())
+    store.save_run(_run())
+    store.save_run(_run().transition("running", at="2026-10-14T12:00:01Z"))
+    store.add_artifact("run-1", "out.txt", b"done")
+    store.append_event("run-1", "event-1", {"event_type": "step"})
+    assert store.claim_trial("trial-1", "owner-1")
+    store.register_trial_container("trial-1", "owner-1", "tbcore-sess-abc123")
+    assert store.trial_containers("trial-1") == ["tbcore-sess-abc123"]
+    store.forget_trial_container("trial-1", "tbcore-sess-abc123")
+    store.release_trial("trial-1", "owner-1")
+    store.save_run(_run(status="completed", artifact_ids=("out.txt",)))
+    assert store.get_spec("exp-1") == _spec()
+    assert store.get_run("run-1").status == "completed"
+    assert [run.run_id for run in store.all_runs()] == ["run-1"]
+    assert [run.run_id for run in store.runs_for_trial("trial-1")] == ["run-1"]
+    assert [event["event_id"] for event in store.events("run-1")] == ["event-1"]
+    assert store.export_run("run-1")["artifacts"][0]["name"] == "out.txt"
+    store.close()
+
+
+def test_concurrent_reads_and_writes_on_one_store_do_not_corrupt_results(tmp_path):
+    store = ExperimentStore(tmp_path / "store")
+    store.add_spec(_spec())
+    store.save_run(_run())
+
+    def worker(index):
+        for step in range(150):
+            if index % 2:
+                store.append_event("run-1", f"event-{index}-{step}", {"event_type": "step"})
+            else:
+                assert store.get_run("run-1").run_id == "run-1"
+                events = store.events("run-1")
+                assert all(event["fields"]["event_type"] == "step" for event in events)
+                assert [run.run_id for run in store.all_runs()] == ["run-1"]
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        for future in [executor.submit(worker, index) for index in range(8)]:
+            future.result()
+
+    assert len(store.events("run-1")) == 4 * 150
+    store.close()
