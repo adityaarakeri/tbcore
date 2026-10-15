@@ -487,3 +487,15 @@ def test_parse_inject_validates_shape():
     for bad in ("[]", '{"a": []}', '{"a": {"k": 1}}'):
         with pytest.raises(ValueError):
             proxy.parse_inject(bad)
+
+
+def test_ready_line_reports_protocol_without_header_values():
+    from tbcore import sandbox as sandbox_mod
+
+    config = proxy.ProxyConfig(allowed_hosts=frozenset({"ok.test", HOST}), inject={HOST: INJECTED})
+    line = proxy.ready_line(config)
+
+    match = sandbox_mod._PROXY_READY_RE.search(line)
+    assert match is not None and int(match.group(1)) == sandbox_mod.PROXY_PROTOCOL_VERSION
+    assert proxy.PROTOCOL_VERSION == sandbox_mod.PROXY_PROTOCOL_VERSION
+    assert "REAL-KEY" not in line

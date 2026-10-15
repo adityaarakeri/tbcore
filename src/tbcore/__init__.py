@@ -40,6 +40,7 @@ from tbcore.sandbox import (
     build_default_images,
     build_image,
     image_context,
+    pull_default_images,
 )
 from tbcore.stats import RegressionResult, Summary, bootstrap_ci, cohens_d, regressed, summary
 from tbcore.timeline import ExecutionTimeline, TelemetryCoverage
@@ -110,6 +111,7 @@ __all__ = [
     "enqueue",
     "image_context",
     "make_model_spec",
+    "pull_default_images",
     "regressed",
     "resolve_model",
     "summary",

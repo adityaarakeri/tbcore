@@ -24,6 +24,9 @@ class FakeDocker:
         self.env_file_contents = None
         self.env_file_mode = None
         self.env_file_path = None
+        self.ready_line = (
+            f"{sandbox_mod._PROXY_READY_MARKER} protocol={sandbox_mod.PROXY_PROTOCOL_VERSION}"
+        )
 
     def __call__(self, docker_bin, args, *, capture_output=False, timeout=None):
         args = list(args)
@@ -38,7 +41,7 @@ class FakeDocker:
         if args[0] == "start":
             stdout = "out\n"
         if args[0] == "logs":
-            stdout = f"{sandbox_mod._PROXY_READY_MARKER}\n"
+            stdout = self.ready_line + "\n"
         return subprocess.CompletedProcess([docker_bin, *args], 0, stdout=stdout, stderr="")
 
     def first(self, verb):
@@ -301,3 +304,99 @@ def test_default_prefix_matches_sandbox_proxy_image(fake_docker):
     tags = build_default_images()
 
     assert tags["proxy"] == Sandbox("x").proxy_image
+
+
+@pytest.mark.parametrize(
+    ("ready_line", "reported"),
+    [
+        ("TBCORE_PROXY_READY allow=['example.com'] inject=[]", "unknown"),
+        ("TBCORE_PROXY_READY protocol=999 allow=[] inject=[]", "999"),
+    ],
+)
+def test_proxy_with_other_protocol_is_refused_and_cleaned_up(
+    fake_docker, tmp_path, ready_line, reported
+):
+    fake_docker.ready_line = ready_line
+    box = Sandbox("img:test", allow_hosts=("example.com",), work_root=tmp_path)
+
+    with pytest.raises(SandboxError, match=rf"protocol {reported}.*build_default_images"):
+        box.prepare()
+
+    proxy_name = fake_docker.first("run")[fake_docker.first("run").index("--name") + 1]
+    assert ["rm", "-f", "-v", proxy_name] in fake_docker.calls
+    assert any(call[:2] == ["network", "rm"] for call in fake_docker.calls)
+    assert box.network_name is None
+
+
+class FakeRegistry:
+    """Answers `docker pull` and `docker image inspect` like a registry-backed daemon."""
+
+    def __init__(self, *, pull_ok=True, digests=None):
+        self.calls = []
+        self.pull_ok = pull_ok
+        self.digests = digests
+
+    def __call__(self, docker_bin, args, *, capture_output=False, timeout=None):
+        args = list(args)
+        self.calls.append(args)
+        if args[0] == "pull":
+            code = 0 if self.pull_ok else 1
+            return subprocess.CompletedProcess(args, code, stdout="", stderr="manifest unknown")
+        tag = args[-1]
+        repository = tag.rsplit(":", 1)[0]
+        digests = self.digests if self.digests is not None else [f"{repository}@sha256:abc123"]
+        return subprocess.CompletedProcess(args, 0, stdout=json.dumps(digests), stderr="")
+
+
+def test_pull_default_images_returns_digest_pinned_refs(monkeypatch):
+    registry = FakeRegistry()
+    monkeypatch.setattr(sandbox_mod, "_docker", registry)
+
+    refs = sandbox_mod.pull_default_images(version="1.2.3")
+
+    assert refs == {
+        "sandbox": "ghcr.io/adityaarakeri/tbcore-sandbox@sha256:abc123",
+        "proxy": "ghcr.io/adityaarakeri/tbcore-proxy@sha256:abc123",
+    }
+    assert ["pull", "ghcr.io/adityaarakeri/tbcore-proxy:1.2.3"] in registry.calls
+
+
+def test_pull_default_images_defaults_to_package_version_and_custom_registry(monkeypatch):
+    import tbcore
+
+    registry = FakeRegistry()
+    monkeypatch.setattr(sandbox_mod, "_docker", registry)
+
+    sandbox_mod.pull_default_images(registry="registry.example.test:5000/team/")
+
+    assert [
+        "pull",
+        f"registry.example.test:5000/team/tbcore-sandbox:{tbcore.__version__}",
+    ] in registry.calls
+
+
+def test_pull_failure_points_at_local_build(monkeypatch):
+    registry = FakeRegistry(pull_ok=False)
+    monkeypatch.setattr(sandbox_mod, "_docker", registry)
+
+    with pytest.raises(SandboxError, match="build_default_images"):
+        sandbox_mod.pull_default_images(version="1.2.3")
+    assert all(call[0] == "pull" for call in registry.calls)
+
+
+def test_pull_without_matching_registry_digest_fails(monkeypatch):
+    registry = FakeRegistry(digests=["docker.io/someone/tbcore-sandbox@sha256:abc123"])
+    monkeypatch.setattr(sandbox_mod, "_docker", registry)
+
+    with pytest.raises(SandboxError, match="no registry digest"):
+        sandbox_mod.pull_default_images(version="1.2.3")
+
+
+@pytest.mark.parametrize("version", ["latest", "1.2", "v1.2.3", ""])
+def test_pull_requires_an_exact_version(monkeypatch, version):
+    registry = FakeRegistry()
+    monkeypatch.setattr(sandbox_mod, "_docker", registry)
+
+    with pytest.raises(ValueError):
+        sandbox_mod.pull_default_images(version=version)
+    assert registry.calls == []

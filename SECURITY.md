@@ -59,7 +59,15 @@ defense-in-depth layer, not a hardened isolation boundary.
   capabilities dropped; its listen ports (3128, 8080) are unprivileged.
 - Pins the base images by digest.
 - Starts the proxy with `--pull=never`, so a missing local proxy image fails instead of
-  being pulled from a registry. Build it with `build_default_images()` first.
+  being pulled from a registry. Build it with `build_default_images()`, or pull the
+  release images explicitly with `pull_default_images()`, which returns references
+  pinned by registry digest.
+- Refuses a proxy image that reports a different host/proxy protocol version (or none,
+  for images built before the check), so a stale proxy cannot silently drop budget
+  limits or telemetry.
+- Publishes release images only from the tagged release workflow on GitHub, with build
+  provenance attestations. Verify one before trusting it:
+  `gh attestation verify oci://ghcr.io/adityaarakeri/tbcore-proxy:<version> --owner adityaarakeri`.
 
 ### What it does not protect against
 

@@ -42,6 +42,10 @@ MAX_REQUEST_BODY = 64 * 1024 * 1024
 STREAM_CHUNK = 65536
 MAX_TELEMETRY_BYTES = 256 * 1024
 TELEMETRY_PREFIX = "TBCORE_USAGE "
+READY_PREFIX = "TBCORE_PROXY_READY"
+# Bump when the host/proxy contract changes: the TBCORE_* environment variables, the ready
+# line, or the TBCORE_USAGE telemetry format. tbcore refuses a proxy reporting another value.
+PROTOCOL_VERSION = 1
 _TELEMETRY_LOCK = threading.Lock()
 FAIL_REASONS = {
     400: "Bad Request",
@@ -850,6 +854,16 @@ def start_servers(
     return forward, reverse
 
 
+def ready_line(config: ProxyConfig) -> str:
+    """The startup line the host waits for; it carries the protocol version."""
+    # Hosts only; injected header values must never be logged.
+    return (
+        f"{READY_PREFIX} protocol={PROTOCOL_VERSION} "
+        f"allow={sorted(config.allowed_hosts - set(config.inject))} "
+        f"inject={sorted(config.inject)}"
+    )
+
+
 def main() -> None:
     config = ProxyConfig(
         allowed_hosts=parse_hosts(os.environ.get("TBCORE_ALLOW_HOSTS", "")),
@@ -860,12 +874,7 @@ def main() -> None:
         connect=parse_upstream_overrides(os.environ.get("TBCORE_UPSTREAM_OVERRIDES", "")),
     )
     forward, reverse = start_servers(config)
-    # Hosts only; injected header values must never be logged.
-    print(
-        f"TBCORE_PROXY_READY allow={sorted(config.allowed_hosts - set(config.inject))} "
-        f"inject={sorted(config.inject)}",
-        flush=True,
-    )
+    print(ready_line(config), flush=True)
     try:
         threading.Event().wait()
     except KeyboardInterrupt:

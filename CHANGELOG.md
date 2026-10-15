@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Release images on GitHub Container Registry: `ghcr.io/adityaarakeri/tbcore-sandbox` and
+  `tbcore-proxy`, tagged with the package version, built for amd64 and arm64, with build
+  provenance attestations. Published by `release.yml` before the PyPI upload.
+- `pull_default_images(version=None, registry=...)` pulls the published images for the
+  installed version and returns references pinned by registry digest.
 - OpenAI-compatible wire (`openai-compat`): talk to Ollama, vLLM, LM Studio,
   OpenAI, or any `/v1/chat/completions` endpoint via `make_model_spec(...)`
   and `Client(spec)`; Bearer auth is sent when an API key is present.
@@ -81,6 +86,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   `proxy_image` now fails with a hint to run `build_default_images()` instead of being
   pulled from a registry (the default `tbcore/proxy:latest` name is not a published image).
   Requires Docker 20.10+.
+- **Behavior change: proxy protocol check.** The proxy's ready line now reports
+  `protocol=<n>`, and `Sandbox` raises `SandboxError` for a proxy image reporting another
+  version or none. Proxy images built by earlier tbcore versions must be rebuilt with
+  `build_default_images()` (or replaced via `pull_default_images()`). A proxy that fails
+  its readiness or protocol check is now removed together with its network.
 - Sandbox containers are now removed with `docker rm -f -v` so anonymous volumes cannot leak.
   The docker create arguments for `run()` are unchanged unless a new option is used.
 - The proxy container now runs as the unprivileged `proxy` user and listens on 3128 (and 8080

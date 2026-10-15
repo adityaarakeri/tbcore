@@ -539,7 +539,11 @@ footer { border-top: 1px solid var(--border); margin-top: 72px; padding-top: 18p
           <p class="expect"><span class="tag">Expect</span><span><code>{'sandbox': 'tbcore/sandbox:latest', 'proxy': 'tbcore/proxy:latest'}</code>, then both images in the listing.</span></p>
           <div class="callout note" role="note">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
-            <div><p class="label">Note</p><p>Upgrading tbcore does not rebuild images or touch running containers. Re-run this step after every upgrade, and record the new image IDs before switching workloads over.</p></div>
+            <div><p class="label">Note</p><p>Upgrading tbcore does not rebuild images or touch running containers. Re-run this step after every upgrade, and record the new image IDs before switching workloads over. An old proxy image is refused with a "speaks protocol" error, so you can't forget for long.</p></div>
+          </div>
+          <div class="callout tip" role="note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z"/></svg>
+            <div><p class="label">On a released version</p><p>Skip the build and pull the published, digest-pinned images instead: <code>images = tbcore.pull_default_images()</code>, then pass <code>images["sandbox"]</code> and <code>proxy_image=images["proxy"]</code> to <code>Sandbox</code>. Unreleased checkouts and offline hosts keep building.</p></div>
           </div>
           <button class="btn done-btn" type="button" aria-pressed="false">Mark step 3 done</button>
         </div>
@@ -915,6 +919,7 @@ replay.import_bundle(bundle)</code></pre>
         <thead><tr><th scope="col">Symptom</th><th scope="col">Likely cause</th><th scope="col">Fix</th></tr></thead>
         <tbody>
           <tr><td><code>failed to start proxy container 'tbcore/proxy:latest'</code> with "No such image"</td><td>The proxy image was never built here. tbcore deliberately won't pull it.</td><td>Run step 3.</td></tr>
+          <tr><td><code>proxy image ... speaks protocol unknown</code> (or another number)</td><td>The local proxy image was built by an older or newer tbcore.</td><td>Rebuild with step 3, or on a released version use <code>pull_default_images()</code>.</td></tr>
           <tr><td><code>failed to connect to the docker API</code></td><td>Docker daemon isn't running.</td><td>Start Docker Desktop, or <code>sudo systemctl start docker</code>.</td></tr>
           <tr><td><code>proxy did not become ready in time</code></td><td>Slow host, or the proxy is crash-looping.</td><td>Re-run once. If it repeats, start a <code>Sandbox</code> by hand and read <code>docker logs</code> for the <code>tbcore-proxy-</code> container before it's removed.</td></tr>
           <tr><td><code>proxy container died:</code> followed by a traceback</td><td>The proxy rejected its config, usually <code>proxy_budget</code>.</td><td>Only <code>max_model_calls</code>, <code>max_total_tokens</code> (integers), <code>max_cost_usd</code>, and <code>rates</code> (decimal strings) are accepted.</td></tr>
