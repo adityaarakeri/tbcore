@@ -2,7 +2,7 @@
 
 **Run repeatable agent experiments in Docker, with the evidence to explain every result.**
 
-tbcore captures a task and its environment, runs baseline and candidate workloads,
+tbcore (Token-Build Core) captures a task and its environment, runs baseline and candidate workloads,
 grades their outputs, and saves a comparison you can inspect or replay. The same
 toolkit includes model-call accounting, resumable batches, and statistical checks.
 Start with a complete local experiment: no API key or paid model required.
