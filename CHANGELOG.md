@@ -110,6 +110,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `ExperimentStore` is safe to share across threads. Reads (`get_run`, `get_spec`,
+  `events`, `all_runs`, `runs_for_trial`, `trial_containers`, artifact verification) used
+  the shared SQLite connection without the store lock, so concurrent `Client` calls or a
+  multi-worker `TrialRunner` could intermittently fail with `sqlite3.InterfaceError` or read
+  a `None` payload, and a read could run inside another thread's open transaction.
 - Editable-install CI and release checks exclude the installed-wheel-only Docker fixture;
   the separate wheel job still runs it. Repository-wide Ruff lint and format gates pass.
 - Retrying pool jobs remain exclusively owned during backoff, preventing duplicate API calls

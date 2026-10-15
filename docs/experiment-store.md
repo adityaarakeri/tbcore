@@ -26,8 +26,9 @@ be read.
 An interrupted artifact write can leave a file before its metadata transaction commits.
 Opening the store checks recorded hashes and removes only unreferenced artifact files.
 It raises on missing or corrupt recorded files so callers can restore from backup or
-investigate. Keep only one active writer process per store root; concurrent threads on
-one store instance are serialized for ordered events. Run retention decisions are made
+investigate. Keep only one active writer process per store root. Threads may share one
+store instance: every read and write on its connection is serialized, and events keep a
+strict per-run order. Run retention decisions are made
 by the caller, which must preserve references to every artifact needed by retained runs.
 
 `export_run` includes referenced workspace manifests and content-addressed blobs,

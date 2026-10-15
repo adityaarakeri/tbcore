@@ -10,7 +10,7 @@ import os
 import sqlite3
 import sys
 import threading
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -87,7 +87,11 @@ def _pid_alive(pid: int) -> bool:
 
 
 class ExperimentStore:
-    """Operator-local store for one or more linked experiment runs."""
+    """Operator-local store for one or more linked experiment runs.
+
+    One instance may be shared by threads in a process: every use of its single SQLite
+    connection, reads included, happens under ``_lock``. Use one writing process per root.
+    """
 
     def __init__(
         self,
@@ -125,6 +129,16 @@ class ExperimentStore:
             self.conn.close()
             raise
 
+    def _fetchone(self, sql: str, params: Sequence[object] = ()) -> Any:
+        """Query and fetch under the lock; the connection is shared across threads."""
+        with self._lock:
+            return self.conn.execute(sql, params).fetchone()
+
+    def _fetchall(self, sql: str, params: Sequence[object] = ()) -> list[Any]:
+        """Query and fetch every row under the lock; never hand out a live cursor."""
+        with self._lock:
+            return self.conn.execute(sql, params).fetchall()
+
     def add_spec(self, spec: ExperimentSpec) -> None:
         self._check_provenance(spec.workspace_ref, spec.environment_ref)
         payload = spec.to_json()
@@ -149,9 +163,9 @@ class ExperimentStore:
                 raise ValueError("trial specification changed")
 
     def get_spec(self, experiment_id: str) -> ExperimentSpec:
-        row = self.conn.execute(
+        row = self._fetchone(
             "SELECT payload FROM specifications WHERE experiment_id=?", (experiment_id,)
-        ).fetchone()
+        )
         if row is None:
             raise KeyError(experiment_id)
         return ExperimentSpec.from_json(row[0])
@@ -206,7 +220,7 @@ class ExperimentStore:
         return self.workspaces.record_environment(provenance)
 
     def get_run(self, run_id: str) -> RunRecord:
-        row = self.conn.execute("SELECT payload FROM runs WHERE run_id=?", (run_id,)).fetchone()
+        row = self._fetchone("SELECT payload FROM runs WHERE run_id=?", (run_id,))
         if row is None:
             raise KeyError(run_id)
         run = RunRecord.from_json(row[0])
@@ -216,13 +230,13 @@ class ExperimentStore:
         return run
 
     def runs_for_trial(self, trial_id: str) -> list[RunRecord]:
-        rows = self.conn.execute("SELECT payload FROM runs ORDER BY rowid").fetchall()
+        rows = self._fetchall("SELECT payload FROM runs ORDER BY rowid")
         return [
             run for (payload,) in rows if (run := RunRecord.from_json(payload)).trial_id == trial_id
         ]
 
     def all_runs(self) -> list[RunRecord]:
-        rows = self.conn.execute("SELECT payload FROM runs ORDER BY rowid").fetchall()
+        rows = self._fetchall("SELECT payload FROM runs ORDER BY rowid")
         return [RunRecord.from_json(payload) for (payload,) in rows]
 
     def claim_trial(self, trial_id: str, owner_id: str) -> bool:
@@ -275,9 +289,9 @@ class ExperimentStore:
             )
 
     def trial_containers(self, trial_id: str) -> list[str]:
-        rows = self.conn.execute(
+        rows = self._fetchall(
             "SELECT container_name FROM trial_containers WHERE trial_id=?", (trial_id,)
-        ).fetchall()
+        )
         return [str(row[0]) for row in rows]
 
     def forget_trial_container(self, trial_id: str, name: str) -> None:
@@ -396,10 +410,10 @@ class ExperimentStore:
 
     def events(self, run_id: str) -> list[dict[str, Any]]:
         self.get_run(run_id)
-        rows = self.conn.execute(
+        rows = self._fetchall(
             "SELECT sequence, event_id, payload FROM events WHERE run_id=? ORDER BY sequence",
             (run_id,),
-        ).fetchall()
+        )
         return [
             {"sequence": row[0], "event_id": row[1], "fields": json.loads(row[2])} for row in rows
         ]
@@ -421,9 +435,9 @@ class ExperimentStore:
             )
 
     def _verified_artifact(self, run_id: str, name: str) -> tuple[bytes, str]:
-        row = self.conn.execute(
+        row = self._fetchone(
             "SELECT sha256, byte_count FROM artifacts WHERE run_id=? AND name=?", (run_id, name)
-        ).fetchone()
+        )
         if row is None:
             raise ValueError(f"artifact {name!r} is not recorded")
         path = self.artifacts.root / run_id / name
@@ -436,7 +450,7 @@ class ExperimentStore:
 
     def _reconcile_artifacts(self) -> None:
         retained: dict[str, set[str]] = {}
-        for run_id, name in self.conn.execute("SELECT run_id, name FROM artifacts"):
+        for run_id, name in self._fetchall("SELECT run_id, name FROM artifacts"):
             self._verified_artifact(run_id, name)
             retained.setdefault(run_id, set()).add(name)
         self.artifacts.cleanup(retained)
@@ -508,4 +522,5 @@ class ExperimentStore:
         self.save_run(run)
 
     def close(self) -> None:
-        self.conn.close()
+        with self._lock:
+            self.conn.close()
