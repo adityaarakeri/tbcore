@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import sys
 import threading
 from collections.abc import Mapping
 from dataclasses import replace
@@ -61,7 +62,9 @@ CREATE TABLE IF NOT EXISTS trial_containers (
 def _pid_alive(pid: int) -> bool:
     if pid == os.getpid():
         return True
-    if os.name == "nt":
+    # A sys.platform if/else (not os.name) lets mypy skip whichever branch does not apply to
+    # the platform it is checking, instead of failing on ctypes.windll or unreachable code.
+    if sys.platform == "win32":
         kernel = ctypes.windll.kernel32
         handle = kernel.OpenProcess(0x1000, False, pid)
         if not handle:
@@ -73,13 +76,14 @@ def _pid_alive(pid: int) -> bool:
             return code.value == 259
         finally:
             kernel.CloseHandle(handle)
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
+    else:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
         return True
-    return True
 
 
 class ExperimentStore:

@@ -64,6 +64,9 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Tests import the repo-root `examples` and `scripts` folders; bare `pytest` does not put
+# the root on sys.path the way `python -m pytest` does.
+pythonpath = ["."]
 asyncio_mode = "auto"
 markers = [
     "docker: integration tests that require a working container runtime",

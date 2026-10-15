@@ -53,6 +53,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   preserving seeded results while reducing peak memory use.
 - Pull-request CI validates built distributions and an isolated installed wheel. Releases
   require checks on the tagged commit and an exact tag/package-version match before publishing.
+- `tbcore.testing.docker_available()` now also requires the daemon to run Linux containers,
+  since the bundled images are Linux-only; a Windows-container daemon reports unavailable.
 
 - **Behavior change: model registry.** `opus`, `sonnet`, `haiku` now resolve to
   `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5` (previously Claude 4.x ids).
