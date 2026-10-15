@@ -45,6 +45,15 @@ The build contexts are package data in `src/tbcore/images/{sandbox,proxy}`. Base
 are pinned by digest; refresh the digest deliberately (Docker Hub
 `library/python` tag `3.11-slim`) and note it in the changelog.
 
+Bump `PROTOCOL_VERSION` in `src/tbcore/images/proxy/proxy.py` whenever the host/proxy
+contract changes: a `TBCORE_*` environment variable, the ready line, or the
+`TBCORE_USAGE` telemetry format. `Sandbox` refuses a proxy reporting a different value.
+
+Pushing a `v*` tag publishes `ghcr.io/<owner>/tbcore-{sandbox,proxy}:<version>` from
+`release.yml` before the PyPI upload. The first release creates the GHCR packages; set
+their visibility to public in the package settings so `pull_default_images()` works
+without credentials.
+
 ## Changelog
 
 Every user-visible change gets an entry under `## [Unreleased]` in `CHANGELOG.md`

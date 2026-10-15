@@ -41,7 +41,8 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import TracebackType
 from typing import IO
 
-from tbcore.images.proxy.proxy import parse_upstream_overrides
+from tbcore.images.proxy.proxy import PROTOCOL_VERSION as PROXY_PROTOCOL_VERSION
+from tbcore.images.proxy.proxy import READY_PREFIX, parse_upstream_overrides
 
 PROXY_PORT = 3128
 REVERSE_PROXY_PORT = 8080
@@ -60,12 +61,17 @@ _HOST_RE = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$")
 _HEADER_NAME_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 IMAGE_NAMES = ("sandbox", "proxy", "codex")
 DEFAULT_IMAGE_NAMES = ("sandbox", "proxy")
+# Release images are published here as tbcore-<name>:<version> (see release.yml).
+DEFAULT_REGISTRY = "ghcr.io/adityaarakeri"
+_IMAGE_VERSION_RE = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-.+][0-9A-Za-z.-]+)?")
 # Proxy container limits: it only relays bytes, so keep it small.
 PROXY_MEMORY = "128m"
 PROXY_CPUS = "0.5"
 PROXY_PIDS_LIMIT = "256"
 DEFAULT_ALLOW_HOSTS = ("api.anthropic.com",)
-_PROXY_READY_MARKER = "TBCORE_PROXY_READY"
+_PROXY_READY_MARKER = READY_PREFIX
+# Proxies built before protocol checks print the marker without ``protocol=``.
+_PROXY_READY_RE = re.compile(rf"^{_PROXY_READY_MARKER}(?: protocol=([0-9]+))?(?=\s|$)", re.M)
 _PROXY_USAGE_PREFIX = "TBCORE_USAGE "
 _TELEMETRY_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 _FORBIDDEN_ENV_CHARS = frozenset(chr(c) for c in (0, 10, 13))
@@ -224,6 +230,52 @@ def build_default_images(tag_prefix: str = "tbcore", docker_bin: str = "docker")
         name: build_image(image_context(name), f"{tag_prefix}/{name}:latest", docker_bin)
         for name in DEFAULT_IMAGE_NAMES
     }
+
+
+def pull_default_images(
+    *,
+    version: str | None = None,
+    registry: str = DEFAULT_REGISTRY,
+    docker_bin: str = "docker",
+) -> dict[str, str]:
+    """Pull the published sandbox and proxy images; returns ``{name: digest_ref}``.
+
+    Images are published per release as ``<registry>/tbcore-<name>:<version>``, defaulting
+    to this package's version. The returned references are pinned by registry digest
+    (``...@sha256:...``), so pass them to :class:`Sandbox` as ``image`` / ``proxy_image``
+    and record them as provenance. Unreleased or offline checkouts should use
+    :func:`build_default_images` instead.
+    """
+    if version is None:
+        # Imported lazily: tbcore/__init__ imports this module before defining __version__.
+        from tbcore import __version__
+
+        version = __version__
+    if not _IMAGE_VERSION_RE.fullmatch(version):
+        raise ValueError(f"image version must be an exact release version, got {version!r}")
+    pinned: dict[str, str] = {}
+    for name in DEFAULT_IMAGE_NAMES:
+        repository = f"{registry.rstrip('/')}/tbcore-{name}"
+        tag = f"{repository}:{version}"
+        pulled = _docker(docker_bin, ["pull", tag], capture_output=True)
+        if pulled.returncode != 0:
+            raise SandboxError(
+                f"docker pull failed for {tag}; if this version is unreleased or you are "
+                f"offline, build locally with build_default_images():\n{pulled.stderr[-4000:]}"
+            )
+        inspected = _docker(
+            docker_bin,
+            ["image", "inspect", "--format", "{{json .RepoDigests}}", tag],
+            capture_output=True,
+        )
+        if inspected.returncode != 0:
+            raise SandboxError(f"docker image inspect failed for {tag}:\n{inspected.stderr}")
+        digests = json.loads(inspected.stdout or "null") or []
+        match = next((d for d in digests if d.startswith(f"{repository}@sha256:")), None)
+        if match is None:
+            raise SandboxError(f"no registry digest recorded for {tag}")
+        pinned[name] = match
+    return pinned
 
 
 def _write_env_file(directory: Path, env: Mapping[str, str]) -> Path:
@@ -688,13 +740,28 @@ class Sandbox:
         if bridged.returncode != 0:
             self.close()
             raise SandboxError(f"could not attach proxy to bridge network:\n{bridged.stderr}")
-        self._wait_proxy_ready(name)
+        try:
+            self._wait_proxy_ready(name)
+        except SandboxError:
+            # Never leave a dead, slow, or mismatched proxy (and its network) behind.
+            self.close()
+            raise
 
     def _wait_proxy_ready(self, name: str, timeout_s: float = 30.0) -> None:
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
             logs = _docker(self.docker_bin, ["logs", name], capture_output=True)
-            if _PROXY_READY_MARKER in (logs.stdout or ""):
+            ready = _PROXY_READY_RE.search(logs.stdout or "")
+            if ready is not None:
+                found = ready.group(1)
+                if found is None or int(found) != PROXY_PROTOCOL_VERSION:
+                    raise SandboxError(
+                        f"proxy image {self.proxy_image!r} speaks protocol "
+                        f"{found or 'unknown (built before protocol checks)'}, but this tbcore "
+                        f"needs protocol {PROXY_PROTOCOL_VERSION}; rebuild it with "
+                        "build_default_images() or pull matching images with "
+                        "pull_default_images()"
+                    )
                 return
             state = _docker(
                 self.docker_bin,

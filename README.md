@@ -160,6 +160,28 @@ with Sandbox(images["sandbox"], timeout_s=30, allow_hosts=(), read_only=True) as
 `api.anthropic.com`; set it explicitly for each workload. `read_only=True` is
 recommended, while the default remains `False` for compatibility.
 
+### Published images
+
+Each release also publishes the sandbox and proxy images to GitHub Container Registry as
+`ghcr.io/adityaarakeri/tbcore-{sandbox,proxy}:<version>` (amd64 and arm64, with build
+provenance attestations). `pull_default_images()` pulls the ones matching your installed
+tbcore and returns digest-pinned references; use it instead of building when you run a
+released version:
+
+```python
+from tbcore import Sandbox, pull_default_images
+
+images = pull_default_images()  # {"sandbox": "ghcr.io/...@sha256:...", "proxy": "..."}
+
+with Sandbox(images["sandbox"], proxy_image=images["proxy"], allow_hosts=()) as box:
+    print(box.run(["python", "-c", "print('hello')"]).stdout)
+```
+
+tbcore never pulls the proxy implicitly. The proxy reports a protocol version when it
+starts, and `Sandbox` refuses a proxy image whose version does not match this tbcore, so
+an outdated local `tbcore/proxy:latest` fails with a rebuild hint instead of misbehaving.
+Unreleased checkouts and offline hosts keep using `build_default_images()`.
+
 `image_context("sandbox")` / `image_context("proxy")` return the bundled build contexts if
 you want to build them yourself (or extend them with `build_image`). Containers run with all
 capabilities dropped, as the image's own `USER` (uid 1000 in the bundled image); pass
