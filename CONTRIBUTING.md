@@ -12,14 +12,16 @@ required. Docker is only needed for the sandbox integration tests.
 
 ## Checks
 
-All of these must pass before a pull request (CI runs them too):
+All of these must pass before a pull request. CI runs the same script:
 
 ```bash
-uv run ruff check .
-uv run ruff format --check .      # `uv run ruff format .` to fix
-uv run mypy                       # strict; configured in pyproject.toml
-uv run pytest -m "not installed_wheel and not live" --cov=tbcore --cov-report=term-missing
+uv run python scripts/check.py          # all steps, stopping at the first failure
+uv run python scripts/check.py tests    # one or more of: lint, format, types, tests
+uv run python scripts/check.py --fix    # apply ruff fixes and formatting, then check
 ```
+
+The steps are `ruff check .`, `ruff format --check .`, `mypy` (strict; configured in
+`pyproject.toml`), and `pytest -m "not installed_wheel and not live"` with coverage.
 
 Style: `from __future__ import annotations`, dataclasses, terse docstrings, 100-column
 lines, ASCII only. No blanket `type: ignore` or `Any` casts, no broad `except`, no silent

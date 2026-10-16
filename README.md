@@ -392,11 +392,11 @@ is higher) and is `nan` when undefined (too little data or zero variance).
 
 ```bash
 uv sync --extra dev
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy
-uv run pytest -m "not installed_wheel and not live" --cov=tbcore --cov-report=term-missing
+uv run python scripts/check.py          # ruff, format check, mypy, then pytest
 ```
+
+Pass step names to run a subset (`lint`, `format`, `types`, `tests`), or `--fix` to apply
+ruff fixes and formatting.
 
 See [CONTRIBUTING.md](https://github.com/adityaarakeri/tbcore/blob/main/CONTRIBUTING.md) for test markers and image maintenance.
 CI runs these checks on Python 3.11-3.13 (Linux), plus 3.12 on Windows and
