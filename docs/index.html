@@ -454,7 +454,7 @@ footer { border-top: 1px solid var(--border); margin-top: 72px; padding-top: 18p
     <p class="crumb" id="top"><a href="../README.md">tbcore</a> / docs / runbook</p>
     <h1>Run an agent experiment with tbcore</h1>
     <ul class="meta">
-      <li>tbcore 0.1.0</li>
+      <li>tbcore 0.2.0</li>
       <li>Python 3.11.4+</li>
       <li>Docker 20.10+</li>
       <li>Checked against <code>release-prep</code>, 15 Oct 2026</li>
@@ -514,14 +514,14 @@ footer { border-top: 1px solid var(--border); margin-top: 72px; padding-top: 18p
         <div class="step-mark" aria-hidden="true"><span class="num">02</span><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
         <div class="step-body">
           <h3>Install into a virtual environment <a class="anchor" href="#step-2" aria-label="Link to step 2">#</a></h3>
-          <p>tbcore is alpha and not on PyPI yet, so install from a checkout. The <code>dev</code> extra brings pytest, ruff, and mypy; drop it if you only run experiments.</p>
+          <p>Install from a checkout so the bundled examples and scripts are on hand; <code>pip install tbcore</code> works too if you only need the library. The <code>dev</code> extra brings pytest, ruff, and mypy; drop it if you only run experiments.</p>
           <div class="code">
             <div class="code-head"><span>shell</span><button class="copy" type="button">Copy</button></div>
 <pre><code><span class="k">python</span> <span class="f">-m</span> venv .venv
 <span data-shell="bash"><span class="k">.venv/bin/python</span></span><span data-shell="pwsh"><span class="k">.venv\Scripts\python.exe</span></span> <span class="f">-m</span> pip install <span class="f">-e</span> <span class="s">".[dev]"</span>
 <span data-shell="bash"><span class="k">.venv/bin/python</span></span><span data-shell="pwsh"><span class="k">.venv\Scripts\python.exe</span></span> <span class="f">-c</span> <span class="s">"import tbcore; print(tbcore.__version__)"</span></code></pre>
           </div>
-          <p class="expect"><span class="tag">Expect</span><span><code>0.1.0</code>. Every later command in this runbook assumes this venv's Python.</span></p>
+          <p class="expect"><span class="tag">Expect</span><span><code>0.2.0</code>. Every later command in this runbook assumes this venv's Python.</span></p>
           <button class="btn done-btn" type="button" aria-pressed="false">Mark step 2 done</button>
         </div>
       </li>

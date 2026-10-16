@@ -7,9 +7,9 @@ grades their outputs, and saves a comparison you can inspect or replay. The same
 toolkit includes model-call accounting, resumable batches, and statistical checks.
 Start with a complete local experiment: no API key or paid model required.
 
-> **Status:** alpha; install from a source checkout. The Docker sandbox
+> **Status:** alpha; `pip install tbcore` (Python 3.11+). The Docker sandbox
 > is defense in depth for a trusted local operator, not a hardened multi-tenant
-> isolation boundary. Read [SECURITY.md](SECURITY.md) before running hostile code.
+> isolation boundary. Read [SECURITY.md](https://github.com/adityaarakeri/tbcore/blob/main/SECURITY.md) before running hostile code.
 
 ## Try the experiment
 
@@ -28,7 +28,7 @@ exported bundle. It prints run IDs and writes:
 - `.tbcore/example/comparison.md` - the baseline/candidate report.
 - `.tbcore/example/candidate-bundle.json` - a portable run bundle.
 
-See the [experiment walkthrough](docs/experiment-workflow.md) for how evidence
+See the [experiment walkthrough](https://github.com/adityaarakeri/tbcore/blob/main/docs/experiment-workflow.md) for how evidence
 is captured, how to resume work, and what the comparison can establish.
 
 On Windows, these commands work in PowerShell when `python` is on `PATH`.
@@ -46,8 +46,8 @@ For an isolated install, create a venv with `python -m venv .venv` and use
 
 The experiment store captures metadata by default. Workspace contents, prompts,
 outputs, and other text evidence require an explicit content-capture policy;
-review exports before sharing them. See [experiment storage](docs/experiment-store.md)
-and [security](SECURITY.md).
+review exports before sharing them. See [experiment storage](https://github.com/adityaarakeri/tbcore/blob/main/docs/experiment-store.md)
+and [security](https://github.com/adityaarakeri/tbcore/blob/main/SECURITY.md).
 
 Python 3.11+ is required. Docker is needed for sandbox and experiment runs;
 the model client, pool, and stats can be used without it. If you only need to
@@ -138,7 +138,7 @@ the `result` column of the `work` table.
 Run model-generated commands in a disposable container with resource limits and
 a network allowlist. The bundled image runs non-root, and tbcore drops container
 capabilities. Docker is required. This is defense in depth; read
-[SECURITY.md](SECURITY.md) for the complete threat model.
+[SECURITY.md](https://github.com/adityaarakeri/tbcore/blob/main/SECURITY.md) for the complete threat model.
 
 ```python
 from tbcore import Sandbox, build_default_images
@@ -275,12 +275,12 @@ installed and registered with Docker.
 
 ### Container upgrades and maintenance
 
-Image build contexts ship with the package under [`src/tbcore/images`](src/tbcore/images).
+Image build contexts ship with the package under [`src/tbcore/images`](https://github.com/adityaarakeri/tbcore/tree/main/src/tbcore/images).
 Base images are digest-pinned. Rebuild with a new tag, test the exact candidate image,
 and record its image ID before switching workloads; updating tbcore does not rebuild
 existing images or replace running containers. The optional Codex image must be built
-separately with an exact `CODEX_VERSION`. See [CONTRIBUTING.md](CONTRIBUTING.md) for
-the required checks and [the experiment guide](docs/experiment-workflow.md) for
+separately with an exact `CODEX_VERSION`. See [CONTRIBUTING.md](https://github.com/adityaarakeri/tbcore/blob/main/CONTRIBUTING.md) for
+the required checks and [the experiment guide](https://github.com/adityaarakeri/tbcore/blob/main/docs/experiment-workflow.md) for
 recording environment provenance and recovery.
 
 ## Agent experiments
@@ -292,9 +292,9 @@ recording environment provenance and recovery.
 | Claude Code, OpenCode, agy | No end-to-end managed-agent experiment fixture yet. |
 | Kubernetes or managed execution | Deferred; Docker is the first backend. |
 
-The [workflow guide](docs/experiment-workflow.md) covers telemetry gaps, recovery,
+The [workflow guide](https://github.com/adityaarakeri/tbcore/blob/main/docs/experiment-workflow.md) covers telemetry gaps, recovery,
 cost limits, and the benchmark recipe. Local samples and their limits are in
-[`docs/performance-results.json`](docs/performance-results.json). CI includes
+[`docs/performance-results.json`](https://github.com/adityaarakeri/tbcore/blob/main/docs/performance-results.json). CI includes
 a separate installed-wheel Docker job.
 
 ## Stats
@@ -325,11 +325,11 @@ mypy
 python -m pytest -m "not installed_wheel and not live" --cov=tbcore --cov-report=term-missing
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for test markers and image maintenance.
+See [CONTRIBUTING.md](https://github.com/adityaarakeri/tbcore/blob/main/CONTRIBUTING.md) for test markers and image maintenance.
 CI runs these checks on Python 3.11-3.13 (Linux), plus 3.12 on Windows and
 macOS, with a separate installed-wheel Docker job. Docker tests skip when no
 container runtime is available; paid live-provider tests are excluded.
 
 ## License
 
-MIT - see [LICENSE](LICENSE).
+MIT - see [LICENSE](https://github.com/adityaarakeri/tbcore/blob/main/LICENSE).

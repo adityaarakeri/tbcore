@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-15
+
+First public release, on PyPI as `tbcore` and on GitHub Container Registry as
+`ghcr.io/adityaarakeri/tbcore-{sandbox,proxy}:0.2.0`.
+
 ### Added
 
 - Release images on GitHub Container Registry: `ghcr.io/adityaarakeri/tbcore-sandbox` and
