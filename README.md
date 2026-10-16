@@ -217,6 +217,41 @@ starts, and `Sandbox` refuses a proxy image whose version does not match this tb
 an outdated local `tbcore/proxy:latest` fails with a rebuild hint instead of misbehaving.
 Unreleased checkouts and offline hosts keep using `build_default_images()`.
 
+### Using the images directly
+
+You can pull the images with plain Docker, for example to mirror them into your own
+registry or to run the sandbox image without Python on the host:
+
+```bash
+docker pull ghcr.io/adityaarakeri/tbcore-sandbox:0.2.0
+docker pull ghcr.io/adityaarakeri/tbcore-proxy:0.2.0
+```
+
+Check that an image was built by this repository's release workflow before trusting it
+(needs the [GitHub CLI](https://cli.github.com/)):
+
+```bash
+gh attestation verify oci://ghcr.io/adityaarakeri/tbcore-sandbox:0.2.0 --owner adityaarakeri
+```
+
+The sandbox image is Python 3.11-slim with a non-root `sandbox` user (uid 1000) and
+`/work` as its working directory. To run a command with no network and roughly the
+limits `Sandbox` applies:
+
+```bash
+docker run --rm --network none --read-only --tmpfs /tmp:rw,size=64m \
+  --cap-drop ALL --security-opt no-new-privileges \
+  --memory 512m --cpus 1.0 --pids-limit 128 \
+  ghcr.io/adityaarakeri/tbcore-sandbox:0.2.0 python -c "print('hello from the sandbox')"
+```
+
+The proxy image is not meant to be started by hand. `Sandbox` creates its internal
+network, passes the allowlist and injected credentials through a private env file, and
+checks the protocol version the proxy reports at startup; that wiring is internal and
+can change between versions. Recording, cost accounting, grading, and comparisons also
+live in the Python library, so use `Sandbox` or `SandboxTrialExecutor` for anything
+beyond a one-off command.
+
 `image_context("sandbox")` / `image_context("proxy")` return the bundled build contexts if
 you want to build them yourself (or extend them with `build_image`). Containers run with all
 capabilities dropped, as the image's own `USER` (uid 1000 in the bundled image); pass
