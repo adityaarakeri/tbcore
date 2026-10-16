@@ -15,12 +15,14 @@ from tbcore import (
     EvaluationSpec,
     Evaluator,
     ExperimentStore,
+    SandboxError,
     SandboxTrialExecutor,
     TrialCase,
     TrialRunner,
     build_default_images,
     compare_experiments,
 )
+from tbcore.testing import docker_available
 
 AGENT = """from pathlib import Path
 import json
@@ -140,7 +142,19 @@ def main() -> None:
         "--image", help="already built sandbox image; default builds bundled images"
     )
     args = parser.parse_args()
-    print(json.dumps(run(args.store, args.image), indent=2))
+    if not docker_available():
+        parser.exit(
+            1,
+            "error: Docker is not available. Install Docker, start the daemon (Docker Desktop "
+            "on Windows/macOS) in Linux-container mode, and retry.\n",
+        )
+    try:
+        result = run(args.store, args.image)
+    except SandboxError as exc:
+        parser.exit(1, f"error: {exc}\n")
+    except subprocess.CalledProcessError as exc:
+        parser.exit(1, f"error: {' '.join(exc.cmd)} failed:\n{exc.stderr}")
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":
