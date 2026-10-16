@@ -1,17 +1,17 @@
 # Reproducible local agent experiments
 
 This is the first Docker-backed experiment path. It uses a fixture agent and no
-paid model calls. From a clean checkout with Python 3.11+ and a working Docker
-daemon:
+paid model calls. From a clean checkout with [uv](https://docs.astral.sh/uv/) and a
+working Docker daemon:
 
 ```bash
-python -m venv .venv
-.venv/bin/python -m pip install -e ".[dev]"
-.venv/bin/python examples/experiment_workflow.py --store .tbcore/example
+uv sync --extra dev
+uv run python examples/experiment_workflow.py --store .tbcore/example
 ```
 
-On Windows, use `.venv\Scripts\python.exe`. The example builds the bundled
-sandbox and proxy images unless `--image` supplies a prebuilt sandbox image.
+`uv sync` downloads Python 3.11+ if none is installed, and the commands are the same
+on Windows. The example builds the bundled sandbox and proxy images unless `--image`
+supplies a prebuilt sandbox image.
 It opts in to workspace and artifact content capture, freezes the source task
 and image ID, runs baseline and candidate configurations as separate trials,
 grades their final `answer.txt`, writes `comparison.md`, exports
@@ -60,7 +60,7 @@ already in flight.
 The optional paid smoke is `tests/test_live_codex_smoke.py`. Set
 `TBCORE_RUN_LIVE_CODEX=1`, `OPENAI_API_KEY`, an exact `TBCORE_CODEX_VERSION`, and
 `TBCORE_LIVE_REPORT` to a local JSON output path, then run
-`python -m pytest -m live tests/test_live_codex_smoke.py -q`. It permits at most
+`uv run pytest -m live tests/test_live_codex_smoke.py -q`. It permits at most
 four model calls, has a 2,000-token admission limit, and bounds command and
 session time. The report records the installed tbcore version, CLI version,
 image ID, model, usage, and configured limits without the API key. These are
@@ -96,9 +96,9 @@ workspace cannot be reconstructed.
 On the operator's Docker host, build an exact image and run:
 
 ```bash
-python -m pip install -e ".[dev]"
-python -c "import tbcore; print(tbcore.build_default_images())"
-python scripts/benchmark_experiment.py --image tbcore/sandbox:latest --samples 20 --concurrency 2 --output benchmark.json
+uv sync --extra dev
+uv run python -c "import tbcore; print(tbcore.build_default_images())"
+uv run python scripts/benchmark_experiment.py --image tbcore/sandbox:latest --samples 20 --concurrency 2 --output benchmark.json
 ```
 
 Record the machine, Docker version/runtime, image ID, concurrency, sample
