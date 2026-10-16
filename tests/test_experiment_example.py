@@ -1,9 +1,10 @@
 import shutil
 from pathlib import Path
 
+import pytest
 from examples import experiment_workflow
 
-from tbcore import CapturePolicy, ExperimentStore
+from tbcore import CapturePolicy, ExperimentStore, SandboxError
 
 
 def test_documented_example_and_disposable_backup_recovery(tmp_path: Path, monkeypatch):
@@ -35,3 +36,25 @@ def test_documented_example_and_disposable_backup_recovery(tmp_path: Path, monke
         encoding="utf-8"
     ) == "Write the target answer."
     recovered.close()
+
+
+def test_main_exits_cleanly_when_docker_is_unavailable(tmp_path: Path, monkeypatch, capsys):
+    monkeypatch.setattr(experiment_workflow, "docker_available", lambda: False)
+    monkeypatch.setattr("sys.argv", ["experiment_workflow.py", "--store", str(tmp_path)])
+    with pytest.raises(SystemExit) as exited:
+        experiment_workflow.main()
+    assert exited.value.code == 1
+    assert "Docker is not available" in capsys.readouterr().err
+
+
+def test_main_reports_sandbox_errors_without_traceback(tmp_path: Path, monkeypatch, capsys):
+    def fail(store_root, image):
+        raise SandboxError("docker build failed for tbcore/sandbox:latest")
+
+    monkeypatch.setattr(experiment_workflow, "docker_available", lambda: True)
+    monkeypatch.setattr(experiment_workflow, "run", fail)
+    monkeypatch.setattr("sys.argv", ["experiment_workflow.py", "--store", str(tmp_path)])
+    with pytest.raises(SystemExit) as exited:
+        experiment_workflow.main()
+    assert exited.value.code == 1
+    assert "error: docker build failed" in capsys.readouterr().err
