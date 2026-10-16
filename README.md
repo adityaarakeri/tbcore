@@ -1,6 +1,18 @@
-# tbcore
+```
+ ▀█▀ █▄▄ █▀▀ █▀█ █▀█ █▀▀
+  █  █▄█ █▄▄ █▄█ █▀▄ ██▄
+```
 
-**Run repeatable agent experiments in Docker, with the evidence to explain every result.**
+> Run repeatable agent experiments in Docker: capture inputs, track tool calls, token usage
+> and cost, grade outputs, and compare baseline vs candidate with evidence for every result.
+
+<!-- badges -->
+[![CI](https://github.com/adityaarakeri/tbcore/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/adityaarakeri/tbcore/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/tbcore)](https://pypi.org/project/tbcore/)
+[![Python](https://img.shields.io/pypi/pyversions/tbcore)](https://pypi.org/project/tbcore/)
+[![Docker 20.10+](https://img.shields.io/badge/docker-20.10%2B-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/engine/install/)
+[![Images on ghcr.io](https://img.shields.io/badge/ghcr.io-amd64%20%7C%20arm64-2496ED?logo=github)](https://github.com/adityaarakeri?tab=packages&repo_name=tbcore)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/adityaarakeri/tbcore/blob/main/LICENSE)
 
 tbcore (Token-Build Core) captures a task and its environment, runs baseline and candidate workloads,
 grades their outputs, and saves a comparison you can inspect or replay. The same
@@ -10,6 +22,29 @@ Start with a complete local experiment: no API key or paid model required.
 > **Status:** alpha; `pip install tbcore` (Python 3.11+). The Docker sandbox
 > is defense in depth for a trusted local operator, not a hardened multi-tenant
 > isolation boundary. Read [SECURITY.md](https://github.com/adityaarakeri/tbcore/blob/main/SECURITY.md) before running hostile code.
+
+## Install
+
+```bash
+pip install tbcore          # or: uv pip install tbcore
+```
+
+The model client, pool, and stats work without Docker. The sandbox and experiments need
+Docker; on a released version, pull the matching published images instead of building them:
+
+```bash
+python -c "import tbcore; print(tbcore.pull_default_images())"
+```
+
+| | Supported | Checked in CI |
+| --- | --- | --- |
+| Python | 3.11, 3.12, 3.13 | 3.11 to 3.13 on Linux; 3.12 on macOS and Windows |
+| Docker Engine | 20.10+ running Linux containers | Docker tests on GitHub's Ubuntu runner, from the installed wheel |
+| Images | `linux/amd64`, `linux/arm64` | Built, pushed, and attested by each release |
+| OS | Linux, macOS, Windows | Unit tests on all three; Docker tests on Linux |
+
+Docker Desktop 29.1.5 on Windows has also been tested locally. macOS and Windows CI
+runners have no Linux-container Docker, so Docker-backed tests are skipped there.
 
 ## Try the experiment
 
@@ -181,6 +216,41 @@ tbcore never pulls the proxy implicitly. The proxy reports a protocol version wh
 starts, and `Sandbox` refuses a proxy image whose version does not match this tbcore, so
 an outdated local `tbcore/proxy:latest` fails with a rebuild hint instead of misbehaving.
 Unreleased checkouts and offline hosts keep using `build_default_images()`.
+
+### Using the images directly
+
+You can pull the images with plain Docker, for example to mirror them into your own
+registry or to run the sandbox image without Python on the host:
+
+```bash
+docker pull ghcr.io/adityaarakeri/tbcore-sandbox:0.2.0
+docker pull ghcr.io/adityaarakeri/tbcore-proxy:0.2.0
+```
+
+Check that an image was built by this repository's release workflow before trusting it
+(needs the [GitHub CLI](https://cli.github.com/)):
+
+```bash
+gh attestation verify oci://ghcr.io/adityaarakeri/tbcore-sandbox:0.2.0 --owner adityaarakeri
+```
+
+The sandbox image is Python 3.11-slim with a non-root `sandbox` user (uid 1000) and
+`/work` as its working directory. To run a command with no network and roughly the
+limits `Sandbox` applies:
+
+```bash
+docker run --rm --network none --read-only --tmpfs /tmp:rw,size=64m \
+  --cap-drop ALL --security-opt no-new-privileges \
+  --memory 512m --cpus 1.0 --pids-limit 128 \
+  ghcr.io/adityaarakeri/tbcore-sandbox:0.2.0 python -c "print('hello from the sandbox')"
+```
+
+The proxy image is not meant to be started by hand. `Sandbox` creates its internal
+network, passes the allowlist and injected credentials through a private env file, and
+checks the protocol version the proxy reports at startup; that wiring is internal and
+can change between versions. Recording, cost accounting, grading, and comparisons also
+live in the Python library, so use `Sandbox` or `SandboxTrialExecutor` for anything
+beyond a one-off command.
 
 `image_context("sandbox")` / `image_context("proxy")` return the bundled build contexts if
 you want to build them yourself (or extend them with `build_image`). Containers run with all
