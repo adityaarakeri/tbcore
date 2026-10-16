@@ -409,7 +409,7 @@ footer { border-top: 1px solid var(--border); margin-top: 72px; padding-top: 18p
     <p class="nav-group"><span>Prepare the host</span></p>
     <ul class="nav-list">
       <li><a href="#step-1" data-step-link="1"><span class="n">01</span>Check prerequisites</a></li>
-      <li><a href="#step-2" data-step-link="2"><span class="n">02</span>Install into a venv</a></li>
+      <li><a href="#step-2" data-step-link="2"><span class="n">02</span>Install with uv</a></li>
       <li><a href="#step-3" data-step-link="3"><span class="n">03</span>Build bundled images</a></li>
       <li><a href="#step-4" data-step-link="4"><span class="n">04</span>Prove the host works</a></li>
     </ul>
@@ -484,9 +484,8 @@ footer { border-top: 1px solid var(--border); margin-top: 72px; padding-top: 18p
       <p class="sub">About five minutes on a warm Docker cache. No API key, no model calls, nothing billed. Run from the repository root.</p>
       <div class="code">
         <div class="code-head"><span>shell</span><button class="copy" type="button">Copy</button></div>
-<pre><code><span class="k">python</span> <span class="f">-m</span> venv .venv
-<span data-shell="bash"><span class="k">.venv/bin/python</span></span><span data-shell="pwsh"><span class="k">.venv\Scripts\python.exe</span></span> <span class="f">-m</span> pip install <span class="f">-e</span> .
-<span data-shell="bash"><span class="k">.venv/bin/python</span></span><span data-shell="pwsh"><span class="k">.venv\Scripts\python.exe</span></span> examples/experiment_workflow.py <span class="f">--store</span> .tbcore/example</code></pre>
+<pre><code><span class="k">uv</span> sync
+<span class="k">uv</span> run python examples/experiment_workflow.py <span class="f">--store</span> .tbcore/example</code></pre>
       </div>
       <p>It prints a small JSON object. <code>candidate_success_rate</code> should be <code>1.0</code>, and <code>candidate_cost_denominator</code> is <code>0</code> because the fixture makes no model calls. A zero there means "nothing metered", not "free". If this works, your host is fine and you can skip to <a href="#step-5">step 5</a>.</p>
     </section>
@@ -499,10 +498,10 @@ footer { border-top: 1px solid var(--border); margin-top: 72px; padding-top: 18p
         <div class="step-mark" aria-hidden="true"><span class="num">01</span><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
         <div class="step-body">
           <h3>Check prerequisites <a class="anchor" href="#step-1" aria-label="Link to step 1">#</a></h3>
-          <p>You need Python 3.11.4 or newer (the trial executor copies results out with <code>tarfile</code>'s extraction filters, which arrived in 3.11.4) and a running Docker daemon at 20.10 or newer. The proxy starts with <code>--pull=never</code>, which older engines reject.</p>
+          <p>You need <a href="https://docs.astral.sh/uv/">uv</a>, Python 3.11.4 or newer (the trial executor copies results out with <code>tarfile</code>'s extraction filters, which arrived in 3.11.4; uv downloads one if none is installed), and a running Docker daemon at 20.10 or newer. The proxy starts with <code>--pull=never</code>, which older engines reject.</p>
           <div class="code">
             <div class="code-head"><span>shell</span><button class="copy" type="button">Copy</button></div>
-<pre><code><span class="k">python</span> <span class="f">--version</span>
+<pre><code><span class="k">uv</span> <span class="f">--version</span>
 <span class="k">docker</span> version <span class="f">--format</span> <span class="s">'{{.Server.Version}}'</span></code></pre>
           </div>
           <p class="expect"><span class="tag">Expect</span><span>Two version numbers. An error mentioning <code>docker API</code> or <code>dockerDesktopLinuxEngine</code> means the daemon is not running: start Docker Desktop, or <code>sudo systemctl start docker</code> on Linux.</span></p>
@@ -513,15 +512,15 @@ footer { border-top: 1px solid var(--border); margin-top: 72px; padding-top: 18p
       <li class="step" id="step-2" data-step="2">
         <div class="step-mark" aria-hidden="true"><span class="num">02</span><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
         <div class="step-body">
-          <h3>Install into a virtual environment <a class="anchor" href="#step-2" aria-label="Link to step 2">#</a></h3>
-          <p>Install from a checkout so the bundled examples and scripts are on hand; <code>pip install tbcore</code> works too if you only need the library. The <code>dev</code> extra brings pytest, ruff, and mypy; drop it if you only run experiments.</p>
+          <h3>Install with uv <a class="anchor" href="#step-2" aria-label="Link to step 2">#</a></h3>
+          <p>Install from a checkout so the bundled examples and scripts are on hand; <code>uv add tbcore</code> works too if you only need the library. <code>uv sync</code> creates <code>.venv</code> and installs tbcore in editable mode. The <code>dev</code> extra brings pytest, ruff, and mypy; drop <code>--extra dev</code> if you only run experiments.</p>
           <div class="code">
             <div class="code-head"><span>shell</span><button class="copy" type="button">Copy</button></div>
-<pre><code><span class="k">python</span> <span class="f">-m</span> venv .venv
-<span data-shell="bash"><span class="k">.venv/bin/python</span></span><span data-shell="pwsh"><span class="k">.venv\Scripts\python.exe</span></span> <span class="f">-m</span> pip install <span class="f">-e</span> <span class="s">".[dev]"</span>
-<span data-shell="bash"><span class="k">.venv/bin/python</span></span><span data-shell="pwsh"><span class="k">.venv\Scripts\python.exe</span></span> <span class="f">-c</span> <span class="s">"import tbcore; print(tbcore.__version__)"</span></code></pre>
+<pre><code><span class="k">uv</span> sync <span class="f">--extra</span> dev
+<span class="k">uv</span> run python <span class="f">--version</span>
+<span class="k">uv</span> run python <span class="f">-c</span> <span class="s">"import tbcore; print(tbcore.__version__)"</span></code></pre>
           </div>
-          <p class="expect"><span class="tag">Expect</span><span><code>0.2.0</code>. Every later command in this runbook assumes this venv's Python.</span></p>
+          <p class="expect"><span class="tag">Expect</span><span>A Python version of 3.11.4 or newer, then <code>0.2.0</code>. Every later command in this runbook goes through <code>uv run</code>, which uses this environment.</span></p>
           <button class="btn done-btn" type="button" aria-pressed="false">Mark step 2 done</button>
         </div>
       </li>
@@ -533,7 +532,7 @@ footer { border-top: 1px solid var(--border); margin-top: 72px; padding-top: 18p
           <p>The build contexts ship inside the package. The proxy image is the only container that ever sees your API keys, so tbcore will not pull it from a registry: it has to exist locally.</p>
           <div class="code">
             <div class="code-head"><span>shell</span><button class="copy" type="button">Copy</button></div>
-<pre><code><span data-shell="bash"><span class="k">.venv/bin/python</span></span><span data-shell="pwsh"><span class="k">.venv\Scripts\python.exe</span></span> <span class="f">-c</span> <span class="s">"import tbcore; print(tbcore.build_default_images())"</span>
+<pre><code><span class="k">uv</span> run python <span class="f">-c</span> <span class="s">"import tbcore; print(tbcore.build_default_images())"</span>
 <span class="k">docker</span> image ls tbcore/*</code></pre>
           </div>
           <p class="expect"><span class="tag">Expect</span><span><code>{'sandbox': 'tbcore/sandbox:latest', 'proxy': 'tbcore/proxy:latest'}</code>, then both images in the listing.</span></p>
@@ -556,7 +555,7 @@ footer { border-top: 1px solid var(--border); margin-top: 72px; padding-top: 18p
           <p>The example runs the same tiny task twice (baseline writes <code>before</code>, candidate writes <code>after</code>), grades both, exports the candidate, and replays it in a fresh store. It reuses the image you just built.</p>
           <div class="code">
             <div class="code-head"><span>shell</span><button class="copy" type="button">Copy</button></div>
-<pre><code><span data-shell="bash"><span class="k">.venv/bin/python</span></span><span data-shell="pwsh"><span class="k">.venv\Scripts\python.exe</span></span> examples/experiment_workflow.py <span class="f">--store</span> .tbcore/example <span class="f">--image</span> tbcore/sandbox:latest</code></pre>
+<pre><code><span class="k">uv</span> run python examples/experiment_workflow.py <span class="f">--store</span> .tbcore/example <span class="f">--image</span> tbcore/sandbox:latest</code></pre>
           </div>
           <p class="expect"><span class="tag">Expect</span><span>Three run IDs, plus <code>.tbcore/example/comparison.md</code>, <code>.tbcore/example/candidate-bundle.json</code>, and a <code>replay/</code> store next to them. Quality reads 0/1 for baseline and 1/1 for candidate. One trial each is a plumbing check, not evidence about anything.</span></p>
           <button class="btn done-btn" type="button" aria-pressed="false">Mark step 4 done</button>
@@ -838,7 +837,7 @@ store.close()</code></pre>
       <p>Run the same script again with the same store root and experiment ID. Completed trials are returned, not rerun. Attempts left in <code>running</code> by a dead process are marked <code>interrupted</code>, and their replacements get new attempt IDs. Registered containers from the dead process are removed before the retry.</p>
       <div class="code">
         <div class="code-head"><span>shell</span><button class="copy" type="button">Copy</button></div>
-<pre><code><span data-shell="bash"><span class="k">.venv/bin/python</span></span><span data-shell="pwsh"><span class="k">.venv\Scripts\python.exe</span></span> experiment.py</code></pre>
+<pre><code><span class="k">uv</span> run python experiment.py</code></pre>
       </div>
       <p>If it raises <code>TrialOwnedError</code>, another live process still owns a trial. Stop that process; tbcore never steals a claim from a live owner. Re-running repeats any external side effects of the interrupted attempt, including model calls.</p>
     </div>
@@ -931,7 +930,7 @@ replay.import_bundle(bundle)</code></pre>
           <tr><td><code>workspace contains a symlink</code></td><td>Symlinks are rejected so a trial can't point outside its workspace.</td><td>Replace the link with a real file in the task directory.</td></tr>
           <tr><td><code>artifact size exceeds policy limit</code></td><td>An output is over <code>max_artifact_bytes</code> (1 MiB by default).</td><td>Raise <code>CapturePolicy(max_artifact_bytes=...)</code>, or capture a smaller output.</td></tr>
           <tr><td><code>content capture is disabled</code></td><td>Metadata-only policy, but something tried to store content.</td><td>Set <code>CapturePolicy(content_enabled=True)</code> if storing content is approved.</td></tr>
-          <tr><td><code>copy_out needs Python &gt;= 3.11.4</code></td><td>Old Python patch release.</td><td>Upgrade Python and recreate the venv.</td></tr>
+          <tr><td><code>copy_out needs Python &gt;= 3.11.4</code></td><td>Old Python patch release.</td><td>Recreate the environment on a newer Python: <code>uv sync --python 3.12</code>.</td></tr>
           <tr><td><code>path must not contain '..'</code> and similar</td><td>An input file name tried to escape <code>/work</code>.</td><td>Use relative names below <code>/work</code>, with forward slashes.</td></tr>
           <tr><td>Cost <code>total</code> is <code>None</code></td><td>A call had no usage, or its model ID isn't in the price card.</td><td>Add the exact model ID to <code>rates</code>. Calls with missing usage stay unknown by design.</td></tr>
           <tr><td>Container fails with permission errors at start</td><td>The image's entrypoint needs root (<code>chown</code>, <code>gosu</code>) and tbcore drops all capabilities.</td><td>Remove root-only startup steps from the image and pass <code>user="1000:1000"</code>.</td></tr>
@@ -1033,7 +1032,7 @@ replay.import_bundle(bundle)</code></pre>
     store('tbcore-runbook-theme', next);
   });
 
-  // Shell choice swaps venv paths and shell-specific commands.
+  // Shell choice swaps shell-specific commands.
   var shellButtons = document.querySelectorAll('[data-set-shell]');
   function syncShell() {
     shellButtons.forEach(function (b) {

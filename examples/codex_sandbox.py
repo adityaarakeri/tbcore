@@ -1,7 +1,7 @@
 """Run Codex CLI against a disposable workspace using proxy-held API credentials.
 
 Set OPENAI_API_KEY and an exact TBCORE_CODEX_VERSION on the host, then run
-``python examples/codex_sandbox.py``.
+``uv run python examples/codex_sandbox.py``.
 Requires Docker and an OpenAI API key with access to the selected model.
 """
 

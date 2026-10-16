@@ -3,21 +3,22 @@
 ## Setup
 
 ```bash
-python -m venv .venv
-.venv/bin/python -m pip install -e ".[dev]"      # Windows: .venv\Scripts\python
+uv sync --extra dev
 ```
 
-Python 3.11+ is required. Docker is only needed for the sandbox integration tests.
+This needs [uv](https://docs.astral.sh/uv/). It creates `.venv`, installs tbcore in
+editable mode with the dev tools, and downloads Python if needed. Python 3.11+ is
+required. Docker is only needed for the sandbox integration tests.
 
 ## Checks
 
 All of these must pass before a pull request (CI runs them too):
 
 ```bash
-ruff check .
-ruff format --check .      # `ruff format .` to fix
-mypy                       # strict; configured in pyproject.toml
-pytest -m "not installed_wheel and not live" --cov=tbcore --cov-report=term-missing
+uv run ruff check .
+uv run ruff format --check .      # `uv run ruff format .` to fix
+uv run mypy                       # strict; configured in pyproject.toml
+uv run pytest -m "not installed_wheel and not live" --cov=tbcore --cov-report=term-missing
 ```
 
 Style: `from __future__ import annotations`, dataclasses, terse docstrings, 100-column
@@ -30,8 +31,8 @@ with defaults that preserve current behavior. Other projects import tbcore.
 - Tests live in `tests/`; async tests run automatically (`asyncio_mode = auto`).
 - Marker `docker`: integration tests that need a working Docker daemon. They skip when
   `tbcore.testing.docker_available()` is false. From an editable install, run them with
-  `pytest -m "docker and not installed_wheel and not live"`, or exclude them with
-  `pytest -m "not docker"`.
+  `uv run pytest -m "docker and not installed_wheel and not live"`, or exclude them with
+  `uv run pytest -m "not docker"`.
 - Marker `installed_wheel`: the complete fake-provider experiment requires an installed
   wheel and runs in the separate Docker CI job; editable-install checks exclude it.
 - Marker `live`: paid-provider smoke is opt-in and excluded from default checks.
