@@ -13,3 +13,5 @@ htmlcov/
 .tbcore/
 CHECKLIST.md
 .agent/
+# uv sync writes this; CI installs with pip, so a committed lock would drift.
+uv.lock

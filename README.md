@@ -19,21 +19,24 @@ grades their outputs, and saves a comparison you can inspect or replay. The same
 toolkit includes model-call accounting, resumable batches, and statistical checks.
 Start with a complete local experiment: no API key or paid model required.
 
-> **Status:** alpha; `pip install tbcore` (Python 3.11+). The Docker sandbox
+> **Status:** alpha; `uv add tbcore` (Python 3.11+). The Docker sandbox
 > is defense in depth for a trusted local operator, not a hardened multi-tenant
 > isolation boundary. Read [SECURITY.md](https://github.com/adityaarakeri/tbcore/blob/main/SECURITY.md) before running hostile code.
 
 ## Install
 
 ```bash
-pip install tbcore          # or: uv pip install tbcore
+uv add tbcore               # or, into an existing environment: uv pip install tbcore
 ```
+
+uv resolves dependencies for every Python version your project allows, so its
+`requires-python` must be `>=3.11`; with `>=3.10`, `uv add` stops and says so.
 
 The model client, pool, and stats work without Docker. The sandbox and experiments need
 Docker; on a released version, pull the matching published images instead of building them:
 
 ```bash
-python -c "import tbcore; print(tbcore.pull_default_images())"
+uv run python -c "import tbcore; print(tbcore.pull_default_images())"
 ```
 
 | | Supported | Checked in CI |
@@ -48,12 +51,12 @@ runners have no Linux-container Docker, so Docker-backed tests are skipped there
 
 ## Try the experiment
 
-You need Python 3.11+, Docker with a running daemon, and a clone of this repository.
-From the repository root:
+You need [uv](https://docs.astral.sh/uv/), Docker with a running daemon, and a clone of
+this repository. From the repository root:
 
 ```bash
-python -m pip install -e .
-python examples/experiment_workflow.py --store .tbcore/example
+uv sync
+uv run python examples/experiment_workflow.py --store .tbcore/example
 ```
 
 The example builds the bundled images, runs the same fixture task with baseline
@@ -66,9 +69,9 @@ exported bundle. It prints run IDs and writes:
 See the [experiment walkthrough](https://github.com/adityaarakeri/tbcore/blob/main/docs/experiment-workflow.md) for how evidence
 is captured, how to resume work, and what the comparison can establish.
 
-On Windows, these commands work in PowerShell when `python` is on `PATH`.
-For an isolated install, create a venv with `python -m venv .venv` and use
-`.venv\Scripts\python.exe` in place of `python` (on macOS/Linux, `.venv/bin/python`).
+`uv sync` creates `.venv`, installs tbcore from the checkout in editable mode, and
+downloads a suitable Python if none is installed; `uv run` then uses that environment.
+The same commands work in PowerShell, bash, and zsh.
 
 ## What is included
 
@@ -290,7 +293,7 @@ code from using your key through the proxy (requests are billed to, and land in,
 
 ### Codex CLI in a sandbox
 
-Run `python examples/codex_sandbox.py` with `OPENAI_API_KEY` set on the host. Set
+Run `uv run python examples/codex_sandbox.py` with `OPENAI_API_KEY` set on the host. Set
 `TBCORE_CODEX_MODEL` to choose a model. The example
 builds the optional `image_context("codex")` image and the proxy, creates a writable
 session workspace, asks Codex to edit a file, checks the timeout, exit status, and file
@@ -388,11 +391,11 @@ is higher) and is `nan` when undefined (too little data or zero variance).
 ## Development
 
 ```bash
-python -m pip install -e ".[dev]"
-ruff check .
-ruff format --check .
-mypy
-python -m pytest -m "not installed_wheel and not live" --cov=tbcore --cov-report=term-missing
+uv sync --extra dev
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy
+uv run pytest -m "not installed_wheel and not live" --cov=tbcore --cov-report=term-missing
 ```
 
 See [CONTRIBUTING.md](https://github.com/adityaarakeri/tbcore/blob/main/CONTRIBUTING.md) for test markers and image maintenance.
