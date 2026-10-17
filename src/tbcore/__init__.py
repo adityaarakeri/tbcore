@@ -22,12 +22,14 @@ from tbcore.comparison import (
     TrialEvidence,
     compare_experiments,
 )
+from tbcore.config import ConfigError, ModelConfig, load_model_config
 from tbcore.costs import CostLedger, CostTotals, PriceCard, RunCostTotals, TokenRates
 from tbcore.evaluation import EvaluationResult, EvaluationSpec, Evaluator
 from tbcore.evidence import CapturePolicy, EvidenceArtifacts
 from tbcore.experiment import ExperimentSpec, RunRecord
 from tbcore.experiment_store import ExperimentStore
 from tbcore.experiment_usage import CallContext
+from tbcore.log import configure_logging
 from tbcore.models import REGISTRY, ModelSpec, make_model_spec, resolve_model
 from tbcore.pool import ExecutionPool, WorkItem, WorkStore, enqueue
 from tbcore.sandbox import (
@@ -110,6 +112,10 @@ __all__ = [
     "cohens_d",
     "enqueue",
     "image_context",
+    "ConfigError",
+    "ModelConfig",
+    "configure_logging",
+    "load_model_config",
     "make_model_spec",
     "pull_default_images",
     "regressed",

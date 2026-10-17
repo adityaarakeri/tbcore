@@ -1,0 +1,43 @@
+# Example model config for tbcore. tbcore never loads this on its own; opt in explicitly:
+#
+#   from tbcore import Client, load_model_config
+#   config = load_model_config("tbcore.toml")
+#   client = Client("local-qwen", config=config)
+#
+# The file holds endpoints, the NAMES of key variables, and prices. Never put a key here
+# (api_key is rejected); keep keys in your environment or .env. Unknown fields or
+# providers, malformed values, and unknown model names are errors, not fallbacks.
+#
+# Resolution with config=: this file first, then tbcore's built-in names (sonnet, opus,
+# haiku, fable, gpt-4o, gpt-4o-mini), otherwise an error. A raw model id is not accepted.
+# An entry here replaces a built-in of the same name entirely, prices included.
+#
+# Fields: provider (required: anthropic, ollama, vllm, openai-compat), model (required),
+# base_url, api_key_env, api_key_required, input_per_mtok, output_per_mtok,
+# cache_write_multiplier, cache_read_multiplier, long_prompt_threshold,
+# long_input_per_mtok, long_output_per_mtok. Prices are USD per million tokens.
+
+# Ollama: base_url defaults to http://localhost:11434, no key needed.
+[models.local-qwen]
+provider = "ollama"
+model = "qwen3:8b"
+
+# vLLM: base_url defaults to http://localhost:8000.
+[models.served]
+provider = "vllm"
+model = "org/model"
+api_key_env = "VLLM_API_KEY"
+
+# LM Studio or any OpenAI-compatible server: base_url is required.
+[models.lmstudio]
+provider = "openai-compat"
+model = "my-model"
+base_url = "http://localhost:1234/v1"
+
+# A gateway in front of Anthropic, with your own price card.
+[models.house-claude]
+provider = "anthropic"
+model = "claude-sonnet-5-5"
+base_url = "https://gateway.example.com"
+input_per_mtok = 2.0
+output_per_mtok = 10.0

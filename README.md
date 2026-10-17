@@ -140,6 +140,42 @@ Notes:
 - On the OpenAI-compatible wire, `Usage.input_tokens` excludes cached tokens (reported
   separately as `cache_read_input_tokens`), matching the Anthropic wire.
 
+### Model config file
+
+Keep endpoints, key variable names, and prices in a TOML file instead of code. Copy
+[`tbcore.example.toml`](https://github.com/adityaarakeri/tbcore/blob/main/tbcore.example.toml)
+and load it explicitly; tbcore never discovers a config on its own:
+
+```python
+from tbcore import Client, load_model_config
+
+config = load_model_config("tbcore.toml")
+local = Client("local-qwen", config=config)
+```
+
+- The file names the environment variable that holds a key (`api_key_env`). A literal
+  `api_key` is rejected, so secrets stay out of the file.
+- Order of precedence: an explicit `Client(..., base_url=...)` or `ModelSpec` argument, then
+  the config file, then the built-in names. A config entry replaces a built-in of the same
+  name entirely, prices included.
+- With `config=`, a name found in neither place raises `ConfigError` instead of being sent
+  as a raw Anthropic model id. Unknown fields, bad URLs, and negative prices also raise.
+- Sandbox settings (`allow_hosts`, `inject_headers`) are not read from the file.
+
+### Logging
+
+tbcore logs under the `tbcore` logger and prints nothing until you opt in:
+
+```python
+from tbcore import configure_logging
+
+configure_logging("INFO")  # level-colored lines on stderr
+```
+
+Each call logs the model, token counts, and latency; failures log the exception type only.
+Prompts, headers, and keys are never logged. Color is used on an interactive terminal; set
+`NO_COLOR` to turn it off or `FORCE_COLOR=1` to keep it when piped, or pass `color=`.
+
 ## Pool
 
 Queue work in a SQLite file, then drain it with bounded concurrency. Re-running after a
