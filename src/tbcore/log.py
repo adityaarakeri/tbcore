@@ -84,15 +84,18 @@ def _use_color(stream: TextIO, requested: bool | None) -> bool:
 
 
 def _ansi_supported(stream: TextIO) -> bool:
-    if sys.platform != "win32":
-        return True
-    # Legacy Windows consoles need virtual-terminal processing switched on.
-    import ctypes
-    import msvcrt
+    supported = True
+    # No early return: mypy's warn_unreachable would flag the Windows-only code on other
+    # platforms (and the fallthrough on Windows).
+    if sys.platform == "win32":
+        # Legacy Windows consoles need virtual-terminal processing switched on.
+        import ctypes
+        import msvcrt
 
-    kernel32 = ctypes.windll.kernel32
-    handle = msvcrt.get_osfhandle(stream.fileno())
-    mode = ctypes.c_uint32()
-    if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
-        return False
-    return bool(kernel32.SetConsoleMode(handle, mode.value | 0x0004))
+        kernel32 = ctypes.windll.kernel32
+        handle = msvcrt.get_osfhandle(stream.fileno())
+        mode = ctypes.c_uint32()
+        supported = bool(kernel32.GetConsoleMode(handle, ctypes.byref(mode))) and bool(
+            kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+        )
+    return supported
