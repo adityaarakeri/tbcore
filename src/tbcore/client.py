@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import time
 import urllib.error
@@ -17,9 +18,12 @@ from typing import Any, Protocol
 
 from tbcore.accounting import CallLog
 from tbcore.budget import RunBudget
+from tbcore.config import ModelConfig
 from tbcore.experiment_store import ExperimentStore
 from tbcore.experiment_usage import CallContext
 from tbcore.models import ModelSpec, resolve_model
+
+logger = logging.getLogger(__name__)
 
 
 class TbError(Exception):
@@ -228,6 +232,11 @@ class Client:
     Ollama). When ``cache_prefix`` is passed to :meth:`complete`, the prefix
     is sent as a cacheable system block so repeated calls with the same
     prefix hit the provider's prompt cache (Anthropic wire only).
+
+    ``config`` (from :func:`tbcore.config.load_model_config`) resolves a string ``model``
+    against the file first, then the built-in registry, and raises on an unknown name
+    instead of treating it as a raw model id. A ``ModelSpec`` passed as ``model`` always
+    wins over the config.
     """
 
     def __init__(
@@ -242,8 +251,14 @@ class Client:
         max_tokens: int = 1024,
         experiment_store: ExperimentStore | None = None,
         budget: RunBudget | None = None,
+        config: ModelConfig | None = None,
     ) -> None:
-        self.spec: ModelSpec = model if isinstance(model, ModelSpec) else resolve_model(model)
+        if isinstance(model, ModelSpec):
+            self.spec: ModelSpec = model
+        elif config is not None:
+            self.spec = config.resolve(model)
+        else:
+            self.spec = resolve_model(model)
         if api_key is None and self.spec.api_key_env:
             api_key = os.environ.get(self.spec.api_key_env)
         if not api_key and self.spec.api_key_required:
@@ -304,9 +319,11 @@ class Client:
             raw = self.transport.send(TransportRequest(payload=payload, headers=headers))
             latency_s = time.perf_counter() - start
             completion = parse(raw, latency_s, self.spec.model_id)
+            self._log_success(completion)
             return completion
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
+            logger.warning("call failed model=%s error=%s", self.spec.model_id, type(exc).__name__)
             raise
         except asyncio.CancelledError:
             error = "CancelledError: call cancelled"
@@ -332,6 +349,22 @@ class Client:
                     ),
                 )
             self._record(payload, completion, latency_s, bool(cache_prefix), error, call_context)
+
+    def _log_success(self, completion: Completion) -> None:
+        if not completion.usage_known:
+            logger.info(
+                "call ok model=%s tokens=unknown latency=%.2fs",
+                self.spec.model_id,
+                completion.latency_s,
+            )
+            return
+        logger.info(
+            "call ok model=%s in=%d out=%d latency=%.2fs",
+            self.spec.model_id,
+            completion.usage.input_tokens,
+            completion.usage.output_tokens,
+            completion.latency_s,
+        )
 
     def _build_anthropic_request(
         self,

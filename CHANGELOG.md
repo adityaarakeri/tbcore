@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `load_model_config(path)` and `Client(..., config=...)`: define named model specs
+  (provider, model, `base_url`, `api_key_env`, prices) in a TOML file; see
+  `tbcore.example.toml`. Loading is always explicit, with no file discovery. Unknown fields,
+  providers, malformed values, a literal `api_key`, URLs with embedded credentials, and
+  negative or non-finite prices raise `ConfigError`. With `config=`, names resolve against
+  the file, then the built-in registry, and an unknown name raises instead of being treated
+  as a raw model id. Behavior without `config=` is unchanged.
+- `configure_logging(level, color=None, stream=None)`: opt-in level-colored console logs
+  from the `tbcore` logger (one line per `Client` call: model, tokens, latency; failures log
+  the exception type only). Honors `NO_COLOR` and `FORCE_COLOR`. Importing tbcore still
+  prints nothing.
+
 ## [0.2.0] - 2026-10-15
 
 First public release, on PyPI as `tbcore` and on GitHub Container Registry as

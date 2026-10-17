@@ -979,12 +979,15 @@ replay.import_bundle(bundle)</code></pre>
         </tbody>
       </table>
     </div>
+    <h4>Model config file</h4>
+    <p>Optional. Copy <code>tbcore.example.toml</code>, then load it by path with <code>load_model_config("tbcore.toml")</code> and pass <code>Client(name, config=config)</code>. tbcore never finds the file on its own. It sets endpoints, the <em>name</em> of the key variable (<code>api_key_env</code>), and prices; a literal <code>api_key</code> is an error. A config entry wins over a built-in of the same name, and a name in neither raises instead of being sent as a raw model id. <code>allow_hosts</code> and <code>inject_headers</code> are not read from it.</p>
     <h4>Environment variables</h4>
     <div class="table-wrap wide">
       <table>
         <thead><tr><th scope="col">Variable</th><th scope="col">Used for</th></tr></thead>
         <tbody>
           <tr><td><code>TBCORE_LOG_PATH</code></td><td>Where <code>CallLog</code> writes when no path is passed.</td></tr>
+          <tr><td><code>NO_COLOR</code>, <code>FORCE_COLOR</code></td><td>Turn off, or keep, the level colors of <code>configure_logging()</code>. Without either, color is used only on an interactive terminal.</td></tr>
           <tr><td><code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code></td><td>Read on the host by <code>Client</code>. Hand them to sandboxes with <code>inject_headers</code>, never <code>env=</code>.</td></tr>
           <tr><td><code>TBCORE_RUN_LIVE_CODEX</code>, <code>TBCORE_CODEX_VERSION</code>, <code>TBCORE_CODEX_MODEL</code>, <code>TBCORE_LIVE_REPORT</code></td><td>Opt-in paid Codex smoke test (<code>pytest -m live</code>). Capped at 4 calls and 2,000 tokens.</td></tr>
         </tbody>
