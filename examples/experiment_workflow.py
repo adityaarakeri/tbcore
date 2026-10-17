@@ -6,6 +6,7 @@ import argparse
 import json
 import subprocess
 import tempfile
+import uuid
 from pathlib import Path
 
 import tbcore
@@ -40,6 +41,8 @@ def run(store_root: Path, image: str | None = None) -> dict[str, object]:
         text=True,
         check=True,
     )
+    # Fresh group per run so reruns against a persistent store do not mix populations.
+    group = f"example-{uuid.uuid4().hex[:8]}"
     store = ExperimentStore(store_root, CapturePolicy(content_enabled=True))
     with tempfile.TemporaryDirectory(prefix="tbcore-example-") as directory:
         source = Path(directory)
@@ -85,7 +88,7 @@ def run(store_root: Path, image: str | None = None) -> dict[str, object]:
         (workspace / "config.json").write_text(json.dumps(case.configuration), encoding="utf-8")
         sandbox_executor(case, workspace, attempt_id, context)
 
-    runs = TrialRunner(store, "example", execute, output_paths=("answer.txt",), max_workers=2).run(
+    runs = TrialRunner(store, group, execute, output_paths=("answer.txt",), max_workers=2).run(
         cases
     )
     grader = Evaluator(store)
@@ -93,7 +96,7 @@ def run(store_root: Path, image: str | None = None) -> dict[str, object]:
     for trial in runs:
         grader.evaluate(trial.run_id, evaluation)
     report = compare_experiments(
-        store, "example", "baseline", "candidate", "fixture-v1", "answer", "v1"
+        store, group, "baseline", "candidate", "fixture-v1", "answer", "v1"
     )
     candidate = runs[1]
     bundle = store.export_run(candidate.run_id)
@@ -120,7 +123,7 @@ def run(store_root: Path, image: str | None = None) -> dict[str, object]:
         (workspace / "config.json").write_text(json.dumps(case.configuration), encoding="utf-8")
         replay_executor(case, workspace, attempt_id, context)
 
-    replay = TrialRunner(replay_store, "example", replay_execute, output_paths=("answer.txt",)).run(
+    replay = TrialRunner(replay_store, group, replay_execute, output_paths=("answer.txt",)).run(
         [replay_case]
     )[0]
     replay_store.close()
