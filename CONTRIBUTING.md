@@ -10,6 +10,14 @@ This needs [uv](https://docs.astral.sh/uv/). It creates `.venv`, installs tbcore
 editable mode with the dev tools, and downloads Python if needed. Python 3.11+ is
 required. Docker is only needed for the sandbox integration tests.
 
+For examples and opt-in tests that read API keys or `TBCORE_*` settings, copy
+`.env.example` to `.env` (git-ignored), uncomment what you need, and pass it to uv.
+tbcore does not load `.env` itself:
+
+```bash
+uv run --env-file .env python examples/codex_sandbox.py
+```
+
 ## Checks
 
 All of these must pass before a pull request. CI runs the same script:

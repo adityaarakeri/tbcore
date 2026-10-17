@@ -11,6 +11,8 @@ venv/
 .coverage
 htmlcov/
 .tbcore/
+# Local secrets; .env.example is the committed template.
+.env
 CHECKLIST.md
 .agent/
 # uv sync writes this; CI installs with pip, so a committed lock would drift.
